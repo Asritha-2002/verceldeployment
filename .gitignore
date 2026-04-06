@@ -8,5 +8,6 @@ original.js
 routes/*
 !routes/userRoutes.js
 middleware/upload
-email-service/.env
+email-service/*
+!email-service/server.js
 frontend/*
