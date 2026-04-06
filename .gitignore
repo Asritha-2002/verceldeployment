@@ -9,5 +9,6 @@ routes/*
 !routes/userRoutes.js
 middleware/upload
 email-service/*
+!email-service/
 !email-service/server.js
 frontend/*
