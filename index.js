@@ -10,8 +10,8 @@ dotenv.config();
 
 // Create Express app
 const app = express();
-const PORT = process.env.PORT_SERVER || 8200;
-console.log("SENDGRID KEY:", process.env.SENDGRID_API_KEY);
+const PORT = process.env.PORT || 8200;
+
 // Middleware setup
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -22,8 +22,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
+app.use((err, req, res, next) => {
+    console.error('Error:', {
+        message: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ 
+        message: err.message,
+        status: 'error'
+    });
+});
 // Database connection with retry logic
-const connectDB = async (retries = 5) => {
+const connectDB = async (retries = 3) => {
     const dbURI = process.env.NODE_ENV === 'production' 
         ? process.env.MONGODB_URI_PROD 
         : process.env.MONGODB_URI_TEST || 'mongodb://localhost:27017/bookstore';
