@@ -37,6 +37,8 @@ const shippingPartnerSchema = new mongoose.Schema({
   trackingUpdates: [trackingUpdateSchema]
 });
 
+
+
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   items: [{
@@ -85,7 +87,7 @@ const orderSchema = new mongoose.Schema({
   totalAmount: { type: Number, required: true },
   status: { 
     type: String, 
-    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refund-completed'],
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
     default: 'pending' 
   },
   payment: {
@@ -121,7 +123,7 @@ const orderSchema = new mongoose.Schema({
     refundMethod: {
       type: String,
       enum: ['original-payment-method', 'bank-transfer', 'wallet', 'cash', 'store-credit', 'no-refund'],
-      required: function() { return this.status === 'cancelled'; }
+      
     },
     cancelledAt: {
       type: Date,

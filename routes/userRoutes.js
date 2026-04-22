@@ -20,26 +20,68 @@ const AdditionalCharges = require('../models/AdditionalCharges');
 
 
 // Register
-router.post('/register', 
+router.post(
+  '/register',
   validate(userSchemas.register),
   async (req, res) => {
-   // console.log("hii");
-    
-   // console.log(req.body);
-    
     try {
+      const { email } = req.body;
+
+      // 1. CHECK USER EXISTS
+      const existingUser = await User.findOne({ email });
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: 'User already exists. Please login instead.'
+        });
+      }
+
+      // 2. CREATE USER
       const verificationToken = crypto.randomBytes(32).toString('hex');
+
       const user = new User({
         ...req.body,
         verificationToken,
         isVerified: false
       });
+
       await user.save();
-      await sendVerificationEmail(user.email, verificationToken);
-      const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET);
-      res.status(201).json({ user, token, message: 'Verification email sent' });
+
+      // 3. TRY EMAIL (DO NOT BLOCK FLOW)
+      let emailStatus = "sent";
+
+      try {
+        await sendVerificationEmail(user.email, verificationToken);
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError.message);
+        emailStatus = "failed";
+      }
+
+      // 4. GENERATE TOKEN
+      const token = jwt.sign(
+        { id: user._id, isAdmin: user.isAdmin },
+        process.env.JWT_SECRET
+      );
+
+      // 5. RESPONSE (SUCCESS ALWAYS)
+      return res.status(201).json({
+        success: true,
+        user,
+        token,
+        message:
+          emailStatus === "sent"
+            ? "Registration successful. Verification email sent."
+            : "Registration successful, but email sending failed. Please try resending verification email."
+      });
+
     } catch (error) {
-      res.status(400).json({ message: error.message });
+      console.error(error);
+      return res.status(500).json({
+        success: false,
+        message: 'Something went wrong',
+        error: error.message
+      });
     }
   }
 );

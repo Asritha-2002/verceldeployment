@@ -16,6 +16,9 @@ const { orderSchemas } = require('../validation/schemas');
 const {validateWebhookSignature} = require('razorpay/dist/utils/razorpay-utils')
 const { sendOrderConfirmationEmail, sendOrderStatusEmail } = require('../config/email');
 
+const generateInvoice = require("../config/generateInvoice");
+// console.log(generateInvoice);
+
 
 
 console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
@@ -29,6 +32,62 @@ var pgInstance = new Razorpay({
 });
 
 
+
+
+
+
+router.post("/:id/invoice", auth, async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+    }).populate("items.book user");
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // ✅ only completed payments
+    if (order.payment?.status !== "completed") {
+      return res.status(400).json({ message: "Payment not completed yet" });
+    }
+
+    // ✅ prevent duplicate invoice generation
+    if (order.orderDetails?.invoice?.url) {
+      return res.json({
+        message: "Invoice already exists",
+        invoice: order.orderDetails.invoice,
+      });
+    }
+
+    // 🔥 Generate invoice number
+    const invoiceNumber = `INV-${Date.now()}-${order._id.toString().slice(-4)}`;
+
+    order.orderDetails.invoice = {
+      number: invoiceNumber,
+      generatedAt: new Date(),
+      url: null,
+    };
+
+    await order.save();
+
+    // 🔥 Generate PDF + upload to Cloudinary
+    const invoiceUrl = await generateInvoicePDF(order);
+
+    // 💾 Save final URL in DB
+    order.orderDetails.invoice.url = invoiceUrl;
+    await order.save();
+
+    return res.json({
+      message: "Invoice generated successfully",
+      invoice: order.orderDetails.invoice,
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
 
 // Middleware to validate Razorpay webhook signature
 router.post('/paymentStatus', async (req, res) => {
@@ -62,6 +121,7 @@ router.post('/paymentStatus', async (req, res) => {
        
         await order.save();
         
+        
         // Send order confirmation email after successful payment
         try {
           await sendOrderConfirmationEmail(order.user.email, order);
@@ -84,7 +144,71 @@ router.post('/paymentStatus', async (req, res) => {
   }
 });
 
+router.patch("/cancel/:orderId",auth, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason, notes, cancelledAt } = req.body;
 
+    // ✅ find order
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    // ✅ check ownership (security)
+    if (order.user.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
+    // ✅ prevent cancelling again
+    if (order.status === "cancelled") {
+      return res.status(400).json({
+        message: "Order already cancelled",
+      });
+    }
+
+    // ✅ allow only processing / shipped
+    if (!["processing", "shipped"].includes(order.status)) {
+      return res.status(400).json({
+        message: "Order cannot be cancelled at this stage",
+      });
+    }
+
+    // ✅ update order
+    order.status = "cancelled";
+
+    order.cancellationDetails = {
+      reason,
+      notes,
+      cancelledAt: cancelledAt || new Date(),
+      cancelledBy: req.user.id, // logged-in user
+    };
+
+    // ✅ optional: update payment status
+    if (order.payment) {
+      order.payment.status = "pending";
+    }
+
+    await order.save();
+
+    res.json({
+      message: "Order cancelled successfully",
+      order,
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+    console.log(err);
+    
+  }
+});
 
 
 router.post('/create-cod-order', auth, async (req, res) => {
@@ -334,14 +458,36 @@ router.post('/create-pay-order', auth, async (req, res) => {
 });
 
 // Get user's orders
-router.get('/', auth, async (req, res) => {
+router.get("/my-orders", auth, async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user.id })
-      .populate('items.book', 'title price images') // Specify required fields
-      .sort('-createdAt');
-    res.json(orders);
+    const orders = await Order.find()
+      .populate("user", "name email phone")
+      .populate("items.book", "title price images")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      orders,
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/my-order", auth, async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.user.id }) // ✅ FIXED HERE
+      .populate("user", "name email phone")
+      .populate("items.book", "title price images")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      orders,
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -407,108 +553,129 @@ router.get('/ad/:id', auth,adminAuth, async (req, res) => {
 
 // Update order status
 router.patch('/:id/status', auth, adminAuth, async (req, res) => {
-    try {
-        const order = await Order.findById(req.params.id)
-            .populate('user', 'email name')
-            .populate('items.book', 'title price images')
-            
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('user', 'email name')
+      .populate('items.book', 'title price images');
 
-        const { status, shippingDetails, cancellationDetails, refundDetails } = req.body;
-        const previousStatus = order.status;
-
-        // Validate status transitions
-        const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refund-completed'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({ message: 'Invalid status value' });
-        }
-
-        if (status === 'shipped') {
-            if (!shippingDetails || !shippingDetails.name || !shippingDetails.trackingId) {
-                return res.status(400).json({ 
-                    message: 'Shipping partner name and tracking ID are required for shipped status' 
-                });
-            }
-
-            order.shipping.deliveryPartner = {
-                name: shippingDetails.name,
-                trackingId: shippingDetails.trackingId,
-                estimatedDelivery: shippingDetails.estimatedDelivery || null,
-                trackingUpdates: [{
-                    status: 'shipped',
-                    description: 'Order has been shipped',
-                    timestamp: new Date()
-                }]
-            };
-
-            // Send shipping confirmation email
-            await sendOrderStatusEmail(order.user.email, order, status);
-        }
-
-        if (status === 'delivered' && previousStatus !== 'delivered') {
-            if (!order.shipping.deliveryPartner) {
-                order.shipping.deliveryPartner = {};
-            }
-            order.shipping.deliveryPartner.trackingUpdates = order.shipping.deliveryPartner.trackingUpdates || [];
-            order.shipping.deliveryPartner.trackingUpdates.push({
-                status: 'delivered',
-                description: 'Order has been delivered',
-                timestamp: new Date()
-            });
-
-            // Send delivery confirmation email
-            await sendOrderStatusEmail(order.user.email, order, status);
-
-            // Update book statistics
-            await Promise.all(order.items.map(item => 
-                Book.findByIdAndUpdate(item.book, {
-                    $inc: { 
-                        'statistics.purchases': item.quantity,
-                        'statistics.totalRevenue': item.price * item.quantity 
-                    }
-                })
-            ));
-        }
-
-        if (status === 'cancelled' && previousStatus !== 'cancelled') {
-            // Store cancellation details if provided
-            if (cancellationDetails) {
-                order.cancellationDetails = {
-                    ...cancellationDetails,
-                    cancelledBy: req.user.id,
-                    cancelledAt: new Date()
-                };
-            }
-
-            // Send cancellation email
-            await sendOrderStatusEmail(order.user.email, order, status);
-        }
-
-        if (status === 'refund-completed' && previousStatus !== 'refund-completed') {
-            // Store refund details if provided
-            if (refundDetails) {
-                order.refundDetails = {
-                    ...refundDetails,
-                    processedBy: req.user.id,
-                    completedAt: new Date()
-                };
-            }
-
-            // Send refund completion email
-            await sendOrderStatusEmail(order.user.email, order, status);
-        }
-
-        // Update status and save
-        order.status = status;
-        await order.save();
-
-        res.json(order);
-    } catch (error) {
-        console.error('Error updating order status:', error);
-        res.status(500).json({ message: error.message });
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
     }
+
+    const { status, shippingDetails, cancellationDetails, refundDetails } = req.body;
+    const previousStatus = order.status;
+
+    const validStatuses = [
+      'pending',
+      'processing',
+      'shipped',
+      'delivered',
+      'cancelled',
+      'refund-completed'
+    ];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    // ✅ ENSURE shipping object exists
+    if (!order.shipping) {
+      order.shipping = {};
+    }
+
+    // ================= SHIPPED =================
+    if (status === 'shipped') {
+      if (!shippingDetails?.name || !shippingDetails?.trackingId) {
+        return res.status(400).json({
+          message: 'Shipping partner name and tracking ID are required'
+        });
+      }
+
+      // ✅ Preserve existing data
+      order.shipping.deliveryPartner = {
+        ...order.shipping.deliveryPartner,
+
+        name: shippingDetails.name,
+        trackingId: shippingDetails.trackingId,
+        estimatedDelivery: shippingDetails.estimatedDelivery || null,
+
+        // ✅ Preserve old updates
+        trackingUpdates: [
+          ...(order.shipping.deliveryPartner?.trackingUpdates || []),
+          {
+            status: 'shipped',
+            description: 'Order has been shipped',
+            timestamp: new Date()
+          }
+        ]
+      };
+
+      // await sendOrderStatusEmail(order.user.email, order, status);
+    }
+
+    // ================= DELIVERED =================
+    if (status === 'delivered' && previousStatus !== 'delivered') {
+      if (!order.shipping.deliveryPartner) {
+        order.shipping.deliveryPartner = {};
+      }
+
+      order.shipping.deliveryPartner.trackingUpdates = [
+        ...(order.shipping.deliveryPartner.trackingUpdates || []),
+        {
+          status: 'delivered',
+          description: 'Order has been delivered',
+          timestamp: new Date()
+        }
+      ];
+
+      //await sendOrderStatusEmail(order.user.email, order, status);
+
+      await Promise.all(order.items.map(item =>
+        Book.findByIdAndUpdate(item.book, {
+          $inc: {
+            'statistics.purchases': item.quantity,
+            'statistics.totalRevenue': item.price * item.quantity
+          }
+        })
+      ));
+    }
+
+    // ================= CANCELLED =================
+    if (status === 'cancelled' && previousStatus !== 'cancelled') {
+      if (cancellationDetails) {
+        order.cancellationDetails = {
+          ...cancellationDetails,
+          cancelledBy: req.user.id,
+          cancelledAt: new Date()
+        };
+      }
+
+      //await sendOrderStatusEmail(order.user.email, order, status);
+    }
+
+    // ================= REFUND =================
+    if (status === 'refund-completed' && previousStatus !== 'refund-completed') {
+      if (refundDetails) {
+        order.refundDetails = {
+          ...refundDetails,
+          processedBy: req.user.id,
+          completedAt: new Date()
+        };
+      }
+
+      //await sendOrderStatusEmail(order.user.email, order, status);
+    }
+
+    // ✅ FINAL SAVE
+    order.status = status;
+    await order.save();
+
+    res.json(order);
+
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // Get order by ID

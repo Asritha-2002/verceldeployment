@@ -22,6 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
+app.use("/invoices", express.static("invoices"));
 app.use('/api/users', userRoutes);
 app.use('/api/users',appointmentRoutes)
 app.use('/api/users',reviewRoute)

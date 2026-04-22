@@ -56,9 +56,61 @@ const sendPasswordResetEmail = async (email, resetToken) => {
 
   await sendEmailViaAPI(mailOptions);
 };
+
+const sendOrderConfirmationEmail = async (email, order) => {
+  const itemsList = order.items.map(item => `
+    <tr>
+      <td style="padding: 16px; border-bottom: 1px solid #eee;">
+        <div style="display:flex; align-items:center;">
+          <img src="${item.imageUrl || ''}" style="width:60px;height:80px;object-fit:cover;margin-right:12px;border-radius:6px;" />
+          <div>
+            <h4 style="margin:0;color:#111;">${item.name}</h4>
+            <p style="margin:4px 0;color:#666;">Qty: ${item.quantity}</p>
+          </div>
+        </div>
+      </td>
+      <td style="text-align:right;">₹${item.price}</td>
+      <td style="text-align:center;">${item.quantity}</td>
+      <td style="text-align:right;">₹${item.price * item.quantity}</td>
+    </tr>
+  `).join("");
+
+  const html = `
+    <div style="font-family:Arial;background:#f6f6f6;padding:20px;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <img src="${process.env.COMPANY_LOGO}" width="80" />
+        <h2 style="color:#dc2626;">Order Confirmation</h2>
+        <p>Thank you for your purchase!</p>
+      </div>
+
+      <div style="background:#fff;padding:20px;border-radius:10px;">
+        <h3>Order #${order._id.toString().slice(-6)}</h3>
+
+        <table width="100%" style="border-collapse:collapse;margin-top:15px;">
+          <tbody>${itemsList}</tbody>
+        </table>
+
+        <hr />
+
+        <h3>Total: ₹${order.totalAmount}</h3>
+      </div>
+    </div>
+  `;
+
+  const mailOptions = {
+    to: email,
+    subject: `Order Confirmation - #${order._id.toString().slice(-6)}`,
+    html,
+  };
+
+  // ✅ USE YOUR CENTRAL EMAIL FUNCTION
+  await sendEmailViaAPI(mailOptions);
+};
+
 module.exports = {
   sendVerificationEmail,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  sendOrderConfirmationEmail
 };
 // const EMAIL_CREDENTIALS = {
 //   service: 'gmail',

@@ -4,11 +4,11 @@
 .env
 # models/*
 # !models/User.js
-# original.js
+original.js
 # routes/*
 # !routes/userRoutes.js
 # middleware/upload
-email-service/*
-!email-service/
+email-service/.env
+# !email-service/
 # !email-service/server.js
 frontend/*
