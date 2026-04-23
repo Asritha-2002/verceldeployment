@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const fs = require("fs");
 const path = require("path");
 const cloudinary = require("./cloudinary");
@@ -153,40 +153,47 @@ const generateInvoice = async (order) => {
     </html>
     `;
 
-    // 🚀 Puppeteer launch with INCREASED TIMEOUT SETTINGS
+    // 🚀 FIXED PUPPETEER LAUNCH (IMPORTANT FOR RENDER)
     const browser = await puppeteer.launch({
       headless: "new",
-      args: ["--no-sandbox"],
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage"
+      ],
+      executablePath: process.env.CHROME_PATH
     });
 
     const page = await browser.newPage();
 
-    // ✅ INCREASED TIMEOUT (IMPORTANT)
-    await page.setDefaultTimeout(120000); // 2 minutes
-    await page.setDefaultNavigationTimeout(120000); // 2 minutes
+    // ✅ TIMEOUT SETTINGS (SAFE)
+    await page.setDefaultTimeout(120000);
+    await page.setDefaultNavigationTimeout(120000);
 
     await page.setContent(html, {
       waitUntil: "networkidle0",
-      timeout: 120000,
+      timeout: 120000
     });
 
     await page.pdf({
       path: filePath,
       format: "A4",
-      printBackground: true,
+      printBackground: true
     });
 
     await browser.close();
 
+    // UPLOAD TO CLOUDINARY
     const uploadResult = await cloudinary.uploader.upload(filePath, {
       resource_type: "raw",
       folder: "invoices",
-      public_id: invoiceNumber,
+      public_id: invoiceNumber
     });
 
     fs.unlinkSync(filePath);
 
     return uploadResult.secure_url;
+
   } catch (err) {
     console.error("Invoice error:", err);
     throw err;
