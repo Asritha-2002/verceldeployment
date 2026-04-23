@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer-core");
+const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const cloudinary = require("./cloudinary");
@@ -6,7 +6,6 @@ const cloudinary = require("./cloudinary");
 const generateInvoice = async (order) => {
   try {
     const invoiceNumber = order.orderDetails.invoice.number;
-
     const dirPath = path.join(__dirname, "../invoices");
 
     if (!fs.existsSync(dirPath)) {
@@ -154,27 +153,21 @@ const generateInvoice = async (order) => {
     </html>
     `;
 
-    // ✅ RENDER SAFE PUPPETEER LAUNCH
+    // 🚀 Puppeteer launch with INCREASED TIMEOUT SETTINGS
     const browser = await puppeteer.launch({
-      executablePath: process.env.CHROME_PATH, // 👈 IMPORTANT
       headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--single-process",
-        "--no-zygote",
-      ],
+      args: ["--no-sandbox"],
     });
 
     const page = await browser.newPage();
 
-    // ✅ SAFE TIMEOUTS
-    await page.setDefaultTimeout(120000);
-    await page.setDefaultNavigationTimeout(120000);
+    // ✅ INCREASED TIMEOUT (IMPORTANT)
+    await page.setDefaultTimeout(120000); // 2 minutes
+    await page.setDefaultNavigationTimeout(120000); // 2 minutes
 
     await page.setContent(html, {
       waitUntil: "networkidle0",
+      timeout: 120000,
     });
 
     await page.pdf({
@@ -185,7 +178,6 @@ const generateInvoice = async (order) => {
 
     await browser.close();
 
-    // upload to cloudinary
     const uploadResult = await cloudinary.uploader.upload(filePath, {
       resource_type: "raw",
       folder: "invoices",
