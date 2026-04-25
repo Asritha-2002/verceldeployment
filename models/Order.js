@@ -672,7 +672,7 @@ const orderSchema = new mongoose.Schema({
     refundMethod: {
       type: String,
       enum: ['original-payment-method', 'bank-transfer', 'wallet', 'cash', 'store-credit', 'no-refund'],
-      required: function() { return this.status === 'cancelled'; }
+     
     },
     cancelledAt: {
       type: Date,
