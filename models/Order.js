@@ -657,7 +657,10 @@ const orderSchema = new mongoose.Schema({
     paidAmount: Number,
     paidAt: Date
   },
-  
+  voucherUsed: {
+    type: Boolean,
+    default: false
+  }, 
   // Cancellation details
   cancellationDetails: {
     reason: {

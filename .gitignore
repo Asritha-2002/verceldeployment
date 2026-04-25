@@ -8,7 +8,7 @@ original.js
 # routes/*
 # !routes/userRoutes.js
 # middleware/upload
-email-service/.env
+email-service/.env/
 email-service/node_modules/
 # !email-service/
 # !email-service/server.js

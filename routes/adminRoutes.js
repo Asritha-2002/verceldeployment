@@ -844,8 +844,10 @@ router.get("/stats", auth, adminAuth, async (req, res) => {
     const totalOrders = await Order.countDocuments();
 
     const pendingOrders = await Order.countDocuments({
-      status: "pending",
-    });
+  status: {
+    $nin: ["delivered", "cancelled", "refund-completed"],
+  },
+});
 
     const deliveredOrders = await Order.countDocuments({
       status: "delivered",

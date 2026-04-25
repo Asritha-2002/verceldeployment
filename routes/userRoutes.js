@@ -1040,6 +1040,7 @@ router.get("/vouchers", auth, async (req, res) => {
     }).sort({ createdAt: -1 });
 
     const filtered = vouchers.filter(v => {
+      if (v.usedBy?.includes(userId)) return false;
       // extra safety check for usage limit
       if (v.maxUses && v.usedCount >= v.maxUses) return false;
       return true;
@@ -1086,10 +1087,10 @@ router.post("/checkout/start", auth, async (req, res) => {
 
 router.patch("/checkout/voucher", auth, async (req, res) => {
   try {
-    const { voucherId } = req.body;
+    const { voucherId, sessionId } = req.body;
 
-    // 🔍 find active checkout session for user
     const session = await CheckoutSession.findOne({
+      _id: sessionId,
       userId: req.user.id,
       status: "draft",
     });
@@ -1100,7 +1101,6 @@ router.patch("/checkout/voucher", auth, async (req, res) => {
       });
     }
 
-    // 🟢 store or remove voucher
     session.voucherId = voucherId || null;
 
     await session.save();

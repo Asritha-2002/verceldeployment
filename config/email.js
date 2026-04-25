@@ -1,16 +1,15 @@
-require('dotenv').config();
-const sgMail = require('@sendgrid/mail');
+require("dotenv").config();
+const sgMail = require("@sendgrid/mail");
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 //console.log(process.env.SENDGRID_API_KEY);
-
 
 const sendEmailViaAPI = async (mailOptions) => {
   try {
     const msg = {
       to: mailOptions.to,
       from: {
-        name:"Vigmox",
-        email:process.env.EMAIL_USER
+        name: "Vetdiaggenomix",
+        email: process.env.EMAIL_USER,
       },
       subject: mailOptions.subject,
       html: mailOptions.html,
@@ -19,8 +18,8 @@ const sendEmailViaAPI = async (mailOptions) => {
     const response = await sgMail.send(msg);
     return response;
   } catch (error) {
-    console.error('SendGrid email error:', error);
-    throw new Error(error.message || 'Failed to send email via SendGrid');
+    console.error("SendGrid email error:", error);
+    throw new Error(error.message || "Failed to send email via SendGrid");
   }
 };
 const sendVerificationEmail = async (email, verificationToken) => {
@@ -28,12 +27,12 @@ const sendVerificationEmail = async (email, verificationToken) => {
   const mailOptions = {
     from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: 'Email Verification',
+    subject: "Email Verification",
     html: `
       <h2>Verify your email address</h2>
       <p>Click the link below to verify your email:</p>
       <a href="${verifyLink}">Verify Email</a>
-    `
+    `,
   };
 
   await sendEmailViaAPI(mailOptions);
@@ -51,50 +50,123 @@ const sendPasswordResetEmail = async (email, resetToken) => {
       <a href="${resetLink}">Reset Password</a>
       <p>This link will expire in 10 minutes.</p>
       <p>If you didn't request this, please ignore this email.</p>
-    `
+    `,
   };
 
   await sendEmailViaAPI(mailOptions);
 };
 
+
 const sendOrderConfirmationEmail = async (email, order) => {
+
+  // ✅ Generate ALL items list
   const itemsList = order.items.map(item => `
-    <tr>
-      <td style="padding: 16px; border-bottom: 1px solid #eee;">
-        <div style="display:flex; align-items:center;">
-          <img src="${item.imageUrl || ''}" style="width:60px;height:80px;object-fit:cover;margin-right:12px;border-radius:6px;" />
-          <div>
-            <h4 style="margin:0;color:#111;">${item.name}</h4>
-            <p style="margin:4px 0;color:#666;">Qty: ${item.quantity}</p>
-          </div>
-        </div>
-      </td>
-      <td style="text-align:right;">₹${item.price}</td>
-      <td style="text-align:center;">${item.quantity}</td>
-      <td style="text-align:right;">₹${item.price * item.quantity}</td>
-    </tr>
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #eee;">
+      <div>
+        <p style="margin:0;font-weight:500;">${item.name}</p>
+        <p style="margin:4px 0;color:#666;font-size:13px;">Qty: ${item.quantity}</p>
+      </div>
+      <div style="text-align:right;">
+        <p style="margin:0;">₹${item.price * item.quantity}</p>
+      </div>
+    </div>
   `).join("");
 
   const html = `
-    <div style="font-family:Arial;background:#f6f6f6;padding:20px;">
-      <div style="text-align:center;margin-bottom:20px;">
-        <img src="${process.env.COMPANY_LOGO}" width="80" />
-        <h2 style="color:#dc2626;">Order Confirmation</h2>
-        <p>Thank you for your purchase!</p>
-      </div>
+  <div style="font-family:Arial, sans-serif;background:#f6f6f6;padding:20px;">
 
-      <div style="background:#fff;padding:20px;border-radius:10px;">
-        <h3>Order #${order._id.toString().slice(-6)}</h3>
-
-        <table width="100%" style="border-collapse:collapse;margin-top:15px;">
-          <tbody>${itemsList}</tbody>
-        </table>
-
-        <hr />
-
-        <h3>Total: ₹${order.totalAmount}</h3>
-      </div>
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <img src="${process.env.COMPANY_LOGO}" width="70" />
+      <h2 style="color:#dc2626;margin:10px 0 5px;">Thank you for your purchase!</h2>
+      <p style="color:#555;margin:0;">Your order has been successfully placed</p>
     </div>
+
+    <!-- Order Card -->
+    <div style="background:#fff;padding:20px;border-radius:10px;max-width:600px;margin:0 auto;">
+      
+      <p style="margin:0 0 10px;"><strong>Order ID:</strong> #${order._id.toString().slice(-6)}</p>
+
+      <hr style="margin:15px 0;" />
+
+      <!-- ✅ ALL ITEMS -->
+      <div>
+        <h4 style="margin-bottom:10px;">Order Items</h4>
+        ${itemsList}
+      </div>
+
+      <hr style="margin:15px 0;" />
+
+      <!-- Shipping Address -->
+      <div>
+        <h4 style="margin-bottom:8px;">Shipping Address</h4>
+        <p style="margin:0;color:#555;">
+          ${order.shipping?.address?.street || ''},<br/>
+          ${order.shipping?.address?.city || ''}, 
+          ${order.shipping?.address?.state || ''} - ${order.shipping?.address?.pincode || ''}<br/>
+          ${order.shipping?.address?.country || ''}
+        </p>
+      </div>
+
+      <hr style="margin:15px 0;" />
+
+      <!-- Billing -->
+      <div>
+        <h4 style="margin-bottom:10px;">Bill Details</h4>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span>Subtotal</span>
+          <span>₹${order.charges?.subtotal || 0}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span>GST</span>
+          <span>₹${order.charges?.gst || 0}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span>Delivery Charges</span>
+          <span>₹${order.charges?.deliveryCharge || 0}</span>
+        </div>
+
+        ${
+          order.appliedVoucher?.discount > 0
+            ? `
+        <div style="display:flex;justify-content:space-between;margin:6px 0;color:green;">
+          <span>Voucher Discount</span>
+          <span>- ₹${order.appliedVoucher.discount}</span>
+        </div>`
+            : ""
+        }
+
+        <hr style="margin:15px 0;" />
+
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;">
+          <span>Total Amount</span>
+          <span>₹${order.totalAmount}</span>
+        </div>
+      </div>
+
+      <hr style="margin:15px 0;" />
+
+      <!-- Payment -->
+      <div>
+        <h4 style="margin-bottom:8px;">Payment Details</h4>
+        <p style="margin:0;"><strong>Method:</strong> ${order.payment?.method}</p>
+        <p style="margin:5px 0;"><strong>Status:</strong> ${order.payment?.status}</p>
+      </div>
+
+      <p style="margin-top:20px;font-size:13px;color:#666;">
+        If you have any questions, feel free to contact our support team.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;margin-top:20px;font-size:12px;color:#999;">
+      © ${new Date().getFullYear()} ${process.env.COMPANY_NAME}. All rights reserved.
+    </div>
+
+  </div>
   `;
 
   const mailOptions = {
@@ -103,14 +175,267 @@ const sendOrderConfirmationEmail = async (email, order) => {
     html,
   };
 
-  // ✅ USE YOUR CENTRAL EMAIL FUNCTION
   await sendEmailViaAPI(mailOptions);
 };
+
+const sendOrderStatusEmail = async (email, order, status) => {
+  const statusMessages = {
+    processing: "Your order is being processed",
+    shipped: "Your order has been shipped",
+    delivered: "Your order has been delivered",
+    cancelled: "Your order has been cancelled",
+    "refund-completed": "Your order amount has been refunded",
+  };
+
+  const formatText = (text) =>
+    text?.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+
+  const html = `
+  <div style="font-family:Arial, sans-serif;background:#f6f6f6;padding:20px;">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <img src="${process.env.COMPANY_LOGO}" width="70" />
+      <h2 style="color:#dc2626;margin:10px 0;">
+        ${statusMessages[status] || "Order Update"}
+      </h2>
+      <p style="color:#555;">Order #${order._id.toString().slice(-6)}</p>
+    </div>
+
+    <!-- Card -->
+    <div style="background:#fff;padding:20px;border-radius:10px;max-width:600px;margin:0 auto;">
+
+      <p>Dear ${order.user?.name || "Customer"},</p>
+
+      ${
+        status === "cancelled"
+          ? `
+        <div style="padding:15px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;margin:15px 0;">
+          <h3 style="margin:0;color:#dc2626;">Order Cancelled</h3>
+          <p style="margin:5px 0;">Your order has been cancelled. Refund (if applicable) will be processed in 3–5 days.</p>
+        </div>
+
+        ${
+          order.cancellationDetails
+            ? `
+          <div style="margin:10px 0;">
+            <p><strong>Reason:</strong> ${formatText(order.cancellationDetails.reason) || "N/A"}</p>
+            <p><strong>Refund Method:</strong> ${formatText(order.cancellationDetails.refundMethod) || "N/A"}</p>
+          </div>`
+            : ""
+        }
+      `
+          : ""
+      }
+
+      ${
+        status === "refund-completed"
+          ? `
+        <div style="padding:15px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;margin:15px 0;">
+          <h3 style="margin:0;color:#16a34a;">Refund Completed</h3>
+          <p style="margin:5px 0;">
+            ₹${order.refundDetails?.refundAmount || order.totalAmount} has been refunded.
+          </p>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        status === "shipped"
+          ? `
+        <div style="padding:15px;background:#f3f4f6;border-radius:8px;margin:15px 0;">
+          <p><strong>Courier:</strong> ${order.shipping?.deliveryPartner?.name}</p>
+          <p><strong>Tracking ID:</strong> ${order.shipping?.deliveryPartner?.trackingId}</p>
+          ${
+            order.shipping?.deliveryPartner?.estimatedDelivery
+              ? `<p><strong>Expected Delivery:</strong> ${new Date(
+                  order.shipping.deliveryPartner.estimatedDelivery
+                ).toLocaleDateString()}</p>`
+              : ""
+          }
+        </div>
+      `
+          : ""
+      }
+
+      <!-- Items -->
+      <h3 style="margin-top:20px;">Order Items</h3>
+      ${order.items
+        .map(
+          item => `
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:10px 0;">
+          <div>
+            <p style="margin:0;font-weight:500;">${item.name}</p>
+            <p style="margin:4px 0;color:#666;font-size:13px;">Qty: ${item.quantity}</p>
+          </div>
+          <div>₹${item.price * item.quantity}</div>
+        </div>
+      `
+        )
+        .join("")}
+
+      <hr style="margin:20px 0;" />
+
+      <!-- Billing -->
+      <h3>Bill Details</h3>
+
+      <div style="display:flex;justify-content:space-between;margin:6px 0;">
+        <span>Subtotal</span>
+        <span>₹${order.charges?.subtotal || 0}</span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;margin:6px 0;">
+        <span>GST</span>
+        <span>₹${order.charges?.gst || 0}</span>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;margin:6px 0;">
+        <span>Delivery</span>
+        <span>₹${order.charges?.deliveryCharge || 0}</span>
+      </div>
+
+      ${
+        order.appliedVoucher?.discount > 0
+          ? `
+      <div style="display:flex;justify-content:space-between;margin:6px 0;color:green;">
+        <span>Discount</span>
+        <span>- ₹${order.appliedVoucher.discount}</span>
+      </div>`
+          : ""
+      }
+
+      <hr />
+
+      <div style="display:flex;justify-content:space-between;font-weight:bold;">
+        <span>Total</span>
+        <span>₹${order.totalAmount}</span>
+      </div>
+
+      <p style="margin-top:20px;color:#666;">
+        If you have any questions, contact our support team.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;margin-top:20px;font-size:12px;color:#999;">
+      © ${new Date().getFullYear()} ${process.env.COMPANY_NAME}
+    </div>
+  </div>
+  `;
+
+  const mailOptions = {
+    from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Order Update - #${order._id.toString().slice(-6)}`,
+    html,
+  };
+
+  await sendEmailViaAPI(mailOptions);
+};
+const sendAppointmentConfirmationEmail = async (email, appointment) => {
+
+  const html = `
+  <div style="font-family:Arial, sans-serif;background:#f6f6f6;padding:20px;">
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px;">
+      <img src="${process.env.COMPANY_LOGO}" width="70" />
+      <h2 style="color:#dc2626;margin:10px 0;">Appointment Confirmed</h2>
+      <p style="color:#555;">Your appointment has been successfully booked</p>
+    </div>
+
+    <!-- Card -->
+    <div style="background:#fff;padding:20px;border-radius:10px;max-width:600px;margin:0 auto;">
+
+      <p>Dear ${appointment.name},</p>
+
+      <p style="margin-top:10px;">
+        Thank you for booking with us. Here are your appointment details:
+      </p>
+
+      <hr style="margin:15px 0;" />
+
+      <!-- Details -->
+      <div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Appointment ID</strong></span>
+          <span>#${appointment._id.toString().slice(-6)}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Service</strong></span>
+          <span>${appointment.service}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Pet Category</strong></span>
+          <span>${appointment.petCategory}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Date</strong></span>
+          <span>${new Date(appointment.dateOfAppointment).toLocaleDateString()}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Time</strong></span>
+          <span>${appointment.time}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Location</strong></span>
+          <span>${appointment.location}</span>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin:6px 0;">
+          <span><strong>Status</strong></span>
+          <span style="color:green;font-weight:bold;">${appointment.status}</span>
+        </div>
+
+      </div>
+
+      <hr style="margin:15px 0;" />
+
+      <p style="font-size:13px;color:#666;">
+        Please arrive 10 minutes before your scheduled time.
+      </p>
+
+      <p style="font-size:13px;color:#666;">
+        If you need to reschedule or cancel, please contact our support team.
+      </p>
+
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;margin-top:20px;font-size:12px;color:#999;">
+      © ${new Date().getFullYear()} ${process.env.COMPANY_NAME}. All rights reserved.
+    </div>
+
+  </div>
+  `;
+
+  const mailOptions = {
+    from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Appointment Confirmed - #${appointment._id.toString().slice(-6)}`,
+    html,
+  };
+
+  await sendEmailViaAPI(mailOptions);
+};
+
+
+
+
 
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
-  sendOrderConfirmationEmail
+  sendOrderConfirmationEmail,
+  sendOrderStatusEmail,
+  sendAppointmentConfirmationEmail
 };
 // const EMAIL_CREDENTIALS = {
 //   service: 'gmail',
@@ -158,7 +483,7 @@ module.exports = {
 //       <a href="${verifyLink}">Verify Email</a>
 //     `
 //   };
-  
+
 //   try {
 //     await sendEmailViaAPI(mailOptions);
 //   } catch (error) {
@@ -369,7 +694,6 @@ module.exports = {
 //           <h2>Order #${order._id.toString().slice(-6)} Update</h2>
 //           <p>Dear ${order.user.name},</p>
 
-
 //           ${status === 'cancelled' ? `
 //             <div style="margin: 20px 0; padding: 15px; background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px;">
 //               <h3 style="margin: 0 0 10px 0; color: #dc2626;">Order Cancelled</h3>
@@ -385,7 +709,7 @@ module.exports = {
 //                   <strong style="color: #7f1d1d;">Reason:</strong>
 //                   <span style="color: #991b1b; margin-left: 8px;">${order.cancellationDetails.reason?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}</span>
 //                 </div>
-                
+
 //                 <div style="margin-bottom: 10px;">
 //                   <strong style="color: #7f1d1d;">Refund Method:</strong>
 //                   <span style="color: #991b1b; margin-left: 8px;">${order.cancellationDetails.refundMethod?.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'N/A'}</span>
@@ -436,7 +760,7 @@ module.exports = {
 //                     <span style="color: #166534; margin-left: 8px; font-family: monospace; background-color: #f0fdf4; padding: 2px 6px; border-radius: 3px;">${order.refundDetails.referenceId}</span>
 //                   </div>
 //                 ` : ''}
-                
+
 //                 ${order.refundDetails.processedAt ? `
 //                   <div style="margin-bottom: 10px;">
 //                     <strong style="color: #15803d;">Processed At:</strong>
@@ -457,19 +781,19 @@ module.exports = {
 //             <div style="margin: 20px 0; padding: 15px; background-color: #f3f4f6; border-radius: 8px;">
 //               <p style="margin: 5px 0;">Shipping Partner: ${order.shipping.deliveryPartner.name}</p>
 //               <p style="margin: 5px 0;">Tracking ID: ${order.shipping.deliveryPartner.trackingId}</p>
-//               ${order.shipping.deliveryPartner.estimatedDelivery ? 
-//                 `<p style="margin: 5px 0;">Expected Delivery: ${new Date(order.shipping.deliveryPartner.estimatedDelivery).toLocaleDateString()}</p>` 
+//               ${order.shipping.deliveryPartner.estimatedDelivery ?
+//                 `<p style="margin: 5px 0;">Expected Delivery: ${new Date(order.shipping.deliveryPartner.estimatedDelivery).toLocaleDateString()}</p>`
 //                 : ''}
 //             </div>
 //           ` : ''}
 
 //           <h3>Order Items:</h3>
 //           <div style="margin-top: 10px;">
-//             ${order.items.map(item => 
-              
+//             ${order.items.map(item =>
+
 //               `
 //               <div style="display: flex; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-//                 <img src="${item.imageUrl || '#'}" alt="${item.name}" 
+//                 <img src="${item.imageUrl || '#'}" alt="${item.name}"
 //                      style="width: 60px; height: 80px; object-fit: cover; margin-right: 15px;">
 //                 <div>
 //                   <h4 style="margin: 0;">${item.name}</h4>

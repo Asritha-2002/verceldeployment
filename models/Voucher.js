@@ -43,6 +43,10 @@ const voucherSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    usedBy: [{
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "User"
+}],
     minPurchase: {
         type: Number,
         default: 0

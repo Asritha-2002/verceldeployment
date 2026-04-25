@@ -39,18 +39,10 @@ var pgInstance = new Razorpay({
 
 router.post("/:id/invoice", auth, async (req, res) => {
   try {
-    let order ;
-    if (req.user.isAdmin) {
-      // ✅ Admin can access ANY order
-      order = await Order.findById(req.params.id)
-        .populate("items.book user");
-    } else {
-      // ✅ User → only their own order
-      order = await Order.findOne({
-        _id: req.params.id,
-        user: req.user.id,
-      }).populate("items.book user");
-    }
+    const order = await Order.findOne({
+      _id: req.params.id,
+      user: req.user.id,
+    }).populate("items.book user");
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -124,7 +116,7 @@ router.post('/paymentStatus', async (req, res) => {
           order.payment.status = 'completed';
           order.payment.paidAt = new Date();
           order.status = 'processing';
-       
+       console.log(`from backend ${order}`)
         await order.save();
         
         
@@ -616,7 +608,7 @@ router.patch('/:id/status', auth, adminAuth, async (req, res) => {
         ]
       };
 
-      // await sendOrderStatusEmail(order.user.email, order, status);
+     
     }
 
     // ================= DELIVERED =================
@@ -634,7 +626,7 @@ router.patch('/:id/status', auth, adminAuth, async (req, res) => {
         }
       ];
 
-      //await sendOrderStatusEmail(order.user.email, order, status);
+      
 
       await Promise.all(order.items.map(item =>
         Book.findByIdAndUpdate(item.book, {
@@ -656,7 +648,7 @@ router.patch('/:id/status', auth, adminAuth, async (req, res) => {
         };
       }
 
-      //await sendOrderStatusEmail(order.user.email, order, status);
+     
     }
 
     // ================= REFUND =================
@@ -669,12 +661,23 @@ router.patch('/:id/status', auth, adminAuth, async (req, res) => {
         };
       }
 
-      //await sendOrderStatusEmail(order.user.email, order, status);
+      
     }
 
     // ✅ FINAL SAVE
     order.status = status;
     await order.save();
+    if (
+  ['shipped', 'delivered', 'cancelled', 'refund-completed'].includes(status) &&
+  previousStatus !== status
+) {
+  try {
+    await sendOrderStatusEmail(order.user.email, order, status);
+  } catch (error) {
+    console.error("Email failed:", error);
+  }
+}
+
 
     res.json(order);
 
@@ -929,18 +932,30 @@ router.post('/verify-payment', auth, async (req, res) => {
     order.payment.paidAt = new Date();
     order.status = "processing";
 
-    await order.save();
+    // 🔥 SAFE voucher update (ONLY ONCE)
+    if (order.appliedVoucher?.voucher && !order.voucherUsed) {
+      console.log("Updating voucher:", order.appliedVoucher.voucher);
 
-    // ✅ Clear cart AFTER successful payment
-    const cart = await Cart.findOne({ user: order.user._id });
+      await Voucher.findByIdAndUpdate(
+        order.appliedVoucher.voucher,
+        { $inc: { usedCount: 1 },
+       $addToSet: { usedBy: order.user._id } },
+        
+      );
 
-    if (cart) {
-      await Cart.findByIdAndUpdate(cart._id, {
-        items: []
-      });
+      order.voucherUsed = true;
     }
 
-    // ✅ Reduce stock AFTER successful payment
+    // ✅ Save order once
+    await order.save();
+
+    // ✅ Clear cart
+    const cart = await Cart.findOne({ user: order.user._id });
+    if (cart) {
+      await Cart.findByIdAndUpdate(cart._id, { items: [] });
+    }
+
+    // ✅ Reduce stock
     await Promise.all(
       order.items.map(item =>
         Book.findByIdAndUpdate(item.book._id, {
@@ -949,7 +964,7 @@ router.post('/verify-payment', auth, async (req, res) => {
       )
     );
 
-    // ✅ Send confirmation email
+    // ✅ Send email
     try {
       await sendOrderConfirmationEmail(order.user.email, order);
     } catch (emailError) {
@@ -1033,52 +1048,52 @@ router.post("/:id/invoice", auth, async (req, res) => {
 });
 
 //generate invoice for admin
-router.post("/:id/invoices", auth,adminAuth, async (req, res) => {
-  try {
-    const order = await Order.findOne({
-      _id: req.params.id,
-    });
+// router.post("/:id/invoices", auth,adminAuth, async (req, res) => {
+//   try {
+//     const order = await Order.findOne({
+//       _id: req.params.id,
+//     });
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+//     if (!order) {
+//       return res.status(404).json({ message: "Order not found" });
+//     }
 
-    if (order.payment?.status !== "completed") {
-      return res.status(400).json({ message: "Payment not completed" });
-    }
+//     if (order.payment?.status !== "completed") {
+//       return res.status(400).json({ message: "Payment not completed" });
+//     }
 
-    if (order.orderDetails?.invoice?.url) {
-      return res.json({
-        message: "Already generated",
-        invoice: order.orderDetails.invoice,
-      });
-    }
+//     if (order.orderDetails?.invoice?.url) {
+//       return res.json({
+//         message: "Already generated",
+//         invoice: order.orderDetails.invoice,
+//       });
+//     }
 
-    const invoiceNumber = `INV-${Date.now()}-${order._id.toString().slice(-4)}`;
+//     const invoiceNumber = `INV-${Date.now()}-${order._id.toString().slice(-4)}`;
 
-    order.orderDetails.invoice = {
-      number: invoiceNumber,
-      generatedAt: new Date(),
-      url: null,
-    };
+//     order.orderDetails.invoice = {
+//       number: invoiceNumber,
+//       generatedAt: new Date(),
+//       url: null,
+//     };
 
-    await order.save();
+//     await order.save();
 
-    const result = await generateInvoice(order);
+//     const result = await generateInvoice(order);
 
-    // store cloudinary url (optional)
-    order.orderDetails.invoice.url = result.cloudUrl;
-    await order.save();
+//     // store cloudinary url (optional)
+//     order.orderDetails.invoice.url = result.cloudUrl;
+//     await order.save();
 
-    return res.json({
-      message: "Invoice generated",
-      invoice: order.orderDetails.invoice,
-    });
+//     return res.json({
+//       message: "Invoice generated",
+//       invoice: order.orderDetails.invoice,
+//     });
 
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// });
 
 
 

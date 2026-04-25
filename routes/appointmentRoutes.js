@@ -3,7 +3,7 @@ const router = express.Router();
 const Appointment = require("../models/Appointment");
 const {auth} = require("../middleware/auth");
 const { appointmentSchemas } =require('../validation/schemas');
-
+const {sendAppointmentConfirmationEmail}=require('../config/email')
 // ✅ Correct POST route
 router.post("/appointments", auth, async (req, res) => {
   try {
@@ -22,6 +22,11 @@ router.post("/appointments", auth, async (req, res) => {
     });
 
     await appointment.save();
+    try {
+  await sendAppointmentConfirmationEmail(appointment.email, appointment);
+} catch (error) {
+  console.error("Appointment email failed:", error);
+}
 
     res.status(201).json({
       message: "Appointment booked successfully",
@@ -38,7 +43,8 @@ router.post("/appointments", auth, async (req, res) => {
 // get appointments
 router.get("/my", auth, async (req, res) => {
   try {
-    const appointments = await Appointment.find({ userId: req.user.id });
+    const appointments = await Appointment.find({ userId: req.user.id })
+      .sort({ createdAt: -1 }); // ✅ newest first
 
     const updatedAppointments = await Promise.all(
       appointments.map(async (appt) => {
