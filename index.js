@@ -8,6 +8,7 @@ const appointmentRoutes=require('./routes/appointmentRoutes')
 const reviewRoute=require('./routes/reviewRoute.js')
 const adminRoutes = require('./routes/adminRoutes');
 const orderRoutes = require('./routes/orderRoutes.js')
+const emailRoutes = require("./routes/emailRoutes");
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +22,8 @@ const PORT = process.env.PORT;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+app.use('/api/email',emailRoutes)
 
 app.use("/invoices", express.static("invoices"));
 app.use('/api/users', userRoutes);
