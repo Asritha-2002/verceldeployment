@@ -131,7 +131,7 @@ router.post('/books',
   adminAuth, 
   upload.fields([
     { name: 'bookImages', maxCount: 5 },
-    { name: 'bookVideos', maxCount: 2 }
+    // { name: 'bookVideos', maxCount: 2 }
   ]),
   validate(bookSchemas.create), 
   

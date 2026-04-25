@@ -14,7 +14,8 @@ const generateInvoice = async (order) => {
     // 📁 Create folder
     const dirPath = path.join(__dirname, "../invoices");
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+      // fs.mkdirSync(dirPath, { recursive: true });
+      console.log("");
     }
 
     const filePath = path.join(dirPath, `${invoiceNumber}.pdf`);
