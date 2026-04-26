@@ -1030,29 +1030,40 @@ router.get("/books/related/:id", auth, async (req, res) => {
 
 router.get("/vouchers", auth, async (req, res) => {
   try {
+    const userId = req.user.id; //  FIXED: get userId from auth middleware
     const cartTotal = Number(req.query.cartTotal || 0);
     const now = new Date();
 
+    // 🔹 Step 1: Fetch eligible vouchers from DB
     const vouchers = await Voucher.find({
       isActive: true,
-      expiryDate: { $gte: now },        // ❌ remove expired
-      minPurchase: { $lte: cartTotal }, // ❌ remove not eligible
+      expiryDate: { $gte: now },        // not expired
+      minPurchase: { $lte: cartTotal }, // cart eligible
     }).sort({ createdAt: -1 });
 
-    const filtered = vouchers.filter(v => {
-      if (v.usedBy?.includes(userId)) return false;
-      // extra safety check for usage limit
+    // 🔹 Step 2: Apply user-specific restrictions
+    const filtered = vouchers.filter((v) => {
+      //  If user already used this voucher
+      if (v.usedBy && v.usedBy.includes(userId)) return false;
+
+      //  If max usage limit reached
       if (v.maxUses && v.usedCount >= v.maxUses) return false;
-      return true;
+
+      return true; // ✅ valid voucher
     });
 
+    // 🔹 Step 3: Send response
     res.json({
       success: true,
       data: filtered,
     });
 
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Voucher fetch error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 
@@ -1121,27 +1132,25 @@ router.patch("/checkout/voucher", auth, async (req, res) => {
 
 router.get("/checkout/summary", auth, async (req, res) => {
   try {
-    // 1. Get checkout session
     const session = await CheckoutSession.findOne({
       userId: req.user.id,
       status: "draft",
-    });
+    }).sort({ createdAt: -1 }); // ✅ FIXED
 
     if (!session) {
       return res.status(404).json({ message: "Checkout session not found" });
     }
 
-    // 2. Get cart
     const cart = await Cart.findById(session.cartId);
 
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // 3. Get voucher (if applied)
     let voucher = null;
     let voucherDiscount = 0;
 
+    // 🔥 IMPORTANT FIX: use session.voucherId ONLY (no ambiguity)
     if (session.voucherId) {
       voucher = await Voucher.findById(session.voucherId);
 
@@ -1162,7 +1171,6 @@ router.get("/checkout/summary", auth, async (req, res) => {
       }
     }
 
-    // 4. Cart values
     const deliveryFee = 100;
     const productDiscount = cart.totalOriginalAmount - cart.totalAmount;
 
@@ -1177,6 +1185,7 @@ router.get("/checkout/summary", auth, async (req, res) => {
       deliveryFee,
       finalTotal,
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to load summary" });

@@ -104,53 +104,88 @@ router.post('/paymentStatus', async (req, res) => {
   try {
     const payload = req.body;
     const signature = req.headers['x-razorpay-signature'];
-    console.log('Received payload:', payload);
-    console.log('Received signature:', signature);
 
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    console.log('Webhook Secret:', webhookSecret);
-    console.log('Validating signature...', JSON.stringify(payload), signature, webhookSecret);
 
-    const isValid = validateWebhookSignature(JSON.stringify(payload), signature, webhookSecret);
-    console.log(isValid);
-    if (isValid) {
-      fs.writeFileSync('payload.json', JSON.stringify(payload, null, 2));
-      try {
-        const entity = payload.payload.order.entity;
-        console.log(entity);
-        const order = await Order.findOne({
-          'payment.razorpayOrderId': entity.id
-        }).populate('items.book user');
+    const isValid = validateWebhookSignature(
+      JSON.stringify(payload),
+      signature,
+      webhookSecret
+    );
 
-        if (!order) {
-          return res.status(404).json({ message: 'Order not found' });
-        }
-          order.payment.status = 'completed';
-          order.payment.paidAt = new Date();
-          order.status = 'processing';
-       console.log(`from backend ${order}`)
-        await order.save();
-        
-        
-        // Send order confirmation email after successful payment
-        try {
-          await sendOrderConfirmationEmail(order.user.email, order);
-        } catch (emailError) {
-          console.error('Error sending confirmation email:', emailError);
-          // Don't fail the webhook if email fails
-        }
-        
-        res.status(200).json({ status: 'webhook_processed' });
-      } catch (error) {
-        console.error('Webhook processing error:', error);
-        res.status(500).json({ message: 'Error processing webhook' });
-      }
-    } else {
-      res.status(400).json({ message: 'Invalid signature' });
+    if (!isValid) {
+      return res.status(400).json({ message: 'Invalid signature' });
     }
+
+    fs.writeFileSync('payload.json', JSON.stringify(payload, null, 2));
+
+    try {
+      const entity = payload.payload.order.entity;
+
+      const order = await Order.findOne({
+        'payment.razorpayOrderId': entity.id
+      }).populate('items.book user voucher'); // ✅ include voucher
+
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found' });
+      }
+
+      // ==============================
+      // ✅ UPDATE ORDER STATUS
+      // ==============================
+      order.payment.status = 'completed';
+      order.payment.paidAt = new Date();
+      order.status = 'processing';
+
+      // ==============================
+      // 🎟️ VOUCHER USAGE UPDATE
+      // ==============================
+      if (order.payment.voucherUsed && order.appliedVoucher?.voucher) {
+
+  const voucherId = order.appliedVoucher.voucher;
+  console.log(voucherId);
+  
+
+  const voucher = await Voucher.findById(voucherId);
+
+  if (voucher) {
+    const userId = order.user._id;
+
+    // avoid duplicate usage
+    const alreadyUsed = voucher.usedBy?.some(
+      (id) => id.toString() === userId.toString()
+    );
+
+    if (!alreadyUsed) {
+      voucher.usedBy.push(userId);
+      voucher.usedCount = (voucher.usedCount || 0) + 1;
+
+      await voucher.save();
+    }
+  }
+}
+
+      await order.save();
+
+      // ==============================
+      // 📧 EMAIL
+      // ==============================
+      try {
+        await sendOrderConfirmationEmail(order.user.email, order);
+      } catch (emailError) {
+        console.error('Error sending confirmation email:', emailError);
+      }
+
+      return res.status(200).json({ status: 'webhook_processed' });
+
+    } catch (error) {
+      console.error('Webhook processing error:', error);
+      return res.status(500).json({ message: 'Error processing webhook' });
+    }
+
   } catch (error) {
     console.error('Webhook error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
