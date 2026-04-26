@@ -3,7 +3,7 @@ const router = express.Router();
 const Appointment = require("../models/Appointment");
 const {auth} = require("../middleware/auth");
 const { appointmentSchemas } =require('../validation/schemas');
-const {sendAppointmentConfirmationEmail}=require('../config/email')
+const {sendAppointmentConfirmationEmail, sendAppointmentStatusEmail}=require('../config/email')
 // ✅ Correct POST route
 router.post("/appointments", auth, async (req, res) => {
   try {
@@ -70,52 +70,35 @@ router.get("/my", auth, async (req, res) => {
 
 router.put("/appointments/:id", auth, async (req, res) => {
   try {
-    const appointmentId = req.params.id;
-
-    // find appointment
-    const appointment = await Appointment.findById(appointmentId);
+    const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
-      return res.status(404).json({
-        message: "Appointment not found",
-      });
+      return res.status(404).json({ message: "Appointment not found" });
     }
 
-    // 🔐 ensure user owns this appointment
     if (appointment.userId.toString() !== req.user.id) {
-      return res.status(403).json({
-        message: "Unauthorized",
-      });
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
-    // ❌ already cancelled
-    if (appointment.status === "cancelled") {
+    if (["cancelled", "completed"].includes(appointment.status)) {
       return res.status(400).json({
-        message: "Appointment already cancelled",
+        message: "Cannot cancel this appointment",
       });
     }
 
-    // ❌ already completed
-    if (appointment.status === "completed") {
-      return res.status(400).json({
-        message: "Completed appointment cannot be cancelled",
-      });
-    }
-
-    // ✅ update status
     appointment.status = "cancelled";
-
     await appointment.save();
 
-    res.status(200).json({
+    // ✅ EMAIL
+    await sendAppointmentStatusEmail(appointment.email, appointment, "cancelled");
+
+    res.json({
       message: "Appointment cancelled successfully",
       appointment,
     });
 
-  } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -133,7 +116,13 @@ router.put("/appointments/reschedule/:id", auth, async (req, res) => {
     appointment.time = time;
     appointment.rescheduleReason = reason;
 
+    // ✅ IMPORTANT FIX
+    appointment.status = "rescheduled";
+
     await appointment.save();
+
+    // ✅ EMAIL
+    await sendAppointmentStatusEmail(appointment.email, appointment, "rescheduled");
 
     res.json({
       message: "Rescheduled successfully",
@@ -141,6 +130,7 @@ router.put("/appointments/reschedule/:id", auth, async (req, res) => {
     });
 
   } catch (err) {
+    console.error("RESCHEDULE ERROR:", err); 
     res.status(500).json({ message: err.message });
   }
 });

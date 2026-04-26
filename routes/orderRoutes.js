@@ -151,13 +151,14 @@ router.post('/paymentStatus', async (req, res) => {
   }
 });
 
-router.patch("/cancel/:orderId",auth, async (req, res) => {
+router.patch("/cancel/:orderId", auth, async (req, res) => {
   try {
     const { orderId } = req.params;
     const { reason, notes, cancelledAt } = req.body;
 
-    // ✅ find order
-    const order = await Order.findById(orderId);
+    // ✅ populate user (VERY IMPORTANT)
+    const order = await Order.findById(orderId)
+      .populate("user", "email name");
 
     if (!order) {
       return res.status(404).json({
@@ -165,43 +166,55 @@ router.patch("/cancel/:orderId",auth, async (req, res) => {
       });
     }
 
-    // ✅ check ownership (security)
-    if (order.user.toString() !== req.user.id) {
+    // ✅ check ownership
+    if (order.user._id.toString() !== req.user.id) {
       return res.status(403).json({
         message: "Unauthorized",
       });
     }
 
-    // ✅ prevent cancelling again
+    // ✅ prevent duplicate cancel
     if (order.status === "cancelled") {
       return res.status(400).json({
         message: "Order already cancelled",
       });
     }
 
-    // ✅ allow only processing / shipped
+    // ✅ allow only certain statuses
     if (!["processing", "shipped"].includes(order.status)) {
       return res.status(400).json({
         message: "Order cannot be cancelled at this stage",
       });
     }
 
-    // ✅ update order
+    // ✅ update status
     order.status = "cancelled";
 
     order.cancellationDetails = {
       reason,
       notes,
       cancelledAt: cancelledAt || new Date(),
-      cancelledBy: req.user.id, // logged-in user
+      cancelledBy: req.user.id,
     };
 
-    // ✅ optional: update payment status
-    if (order.payment) {
-      order.payment.status = "pending";
-    }
+    // ✅ update payment status
+    // if (order.payment) {
+    //   order.payment.status = "refund-initiated";
+    // }
 
+    // ✅ SAVE FIRST
     await order.save();
+
+    // ✅ SEND EMAIL (AFTER SAVE)
+    try {
+      await sendOrderStatusEmail(
+        order.user.email,
+        order,
+        "cancelled"
+      );
+    } catch (emailError) {
+      console.error("Cancel email failed:", emailError.message);
+    }
 
     res.json({
       message: "Order cancelled successfully",
@@ -209,11 +222,10 @@ router.patch("/cancel/:orderId",auth, async (req, res) => {
     });
 
   } catch (err) {
+    console.log(err);
     res.status(500).json({
       message: err.message,
     });
-    console.log(err);
-    
   }
 });
 

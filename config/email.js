@@ -274,10 +274,160 @@ const sendOrderStatusEmail = async (email, order, status) => {
   }
 };
 
+const sendAppointmentConfirmationEmail = async (email, appointment) => {
+  try {
+    const appointmentDate = new Date(appointment.dateOfAppointment).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "long",
+      year: "numeric"
+    });
+
+    const mailOptions = {
+      from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `Appointment Confirmed - ${process.env.COMPANY_NAME}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9fafb;">
+          
+          <!-- HEADER -->
+          <div style="text-align: center; margin-bottom: 25px;">
+            <img src="${process.env.COMPANY_LOGO}" alt="Logo" style="width: 80px; margin-bottom: 10px;" />
+            <h1 style="color: #16a34a; margin: 0;">Appointment Confirmed</h1>
+            <p style="color: #555;">Your booking has been successfully scheduled</p>
+          </div>
+
+          <!-- MAIN CARD -->
+          <div style="background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1);">
+            
+            <p>Hi <strong>${appointment.name}</strong>,</p>
+
+            <p style="color: #555;">
+              Thank you for booking your appointment with <strong>${process.env.COMPANY_NAME}</strong>.
+              Here are your appointment details:
+            </p>
+
+            <!-- DETAILS -->
+            <div style="margin: 15px 0; line-height: 1.6;">
+              <p><strong>Appointment ID:</strong> #${appointment._id.toString().slice(-6)}</p>
+              <p><strong>Service:</strong> ${appointment.service}</p>
+              <p><strong>Pet Category:</strong> ${appointment.petCategory}</p>
+              <p><strong>Date:</strong> ${appointmentDate}</p>
+              <p><strong>Time:</strong> ${appointment.time}</p>
+              <p><strong>Location:</strong> ${appointment.location}</p>
+              <p><strong>Contact:</strong> ${appointment.phone}</p>
+            </div>
+
+            <!-- NOTE -->
+            <div style="background: #ecfdf5; padding: 12px; border-left: 4px solid #16a34a; border-radius: 6px; margin-top: 15px;">
+              <p style="margin: 0; color: #065f46;">
+                Please arrive at least <strong>10 minutes early</strong> for your appointment.
+              </p>
+            </div>
+
+          </div>
+
+          <!-- FOOTER -->
+          <div style="text-align: center; margin-top: 25px; font-size: 13px; color: #777;">
+            <p>If you need to reschedule or cancel, please contact our support team.</p>
+            <p>© ${new Date().getFullYear()} ${process.env.COMPANY_NAME}. All rights reserved.</p>
+          </div>
+
+        </div>
+      `
+    };
+
+    await sendEmailViaAPI(mailOptions);
+
+  } catch (error) {
+    console.error("Appointment email error:", error.message);
+    throw new Error("Failed to send appointment confirmation email");
+  }
+};
+
+const sendAppointmentStatusEmail = async (email, appointment, type) => {
+  try {
+    const date = new Date(appointment.dateOfAppointment).toLocaleDateString("en-IN");
+
+    const templates = {
+      cancelled: {
+        title: "Appointment Cancelled",
+        message: "Your appointment has been cancelled successfully.",
+        color: "#dc2626"
+      },
+      rescheduled: {
+        title: "Appointment Rescheduled",
+        message: "Your appointment has been rescheduled.",
+        color: "#f59e0b"
+      },
+      completed: {
+        title: "Appointment Completed",
+        message: "Your appointment has been successfully completed.",
+        color: "#16a34a"
+      }
+    };
+
+    const selected = templates[type];
+
+    const mailOptions = {
+      from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `${selected.title} - ${process.env.COMPANY_NAME}`,
+      html: `
+        <div style="font-family: Arial; max-width: 600px; margin: auto; padding: 20px;">
+          
+          <div style="text-align: center;">
+            <img src="${process.env.COMPANY_LOGO}" style="width: 70px;" />
+            <h2 style="color: ${selected.color};">${selected.title}</h2>
+          </div>
+
+          <p>Hi <strong>${appointment.name}</strong>,</p>
+
+          <p>${selected.message}</p>
+
+          <div style="background:#f3f4f6; padding:15px; border-radius:6px;">
+            <p><strong>Appointment ID:</strong> #${appointment._id.toString().slice(-6)}</p>
+            <p><strong>Service:</strong> ${appointment.service}</p>
+            <p><strong>Date:</strong> ${date}</p>
+            <p><strong>Time:</strong> ${appointment.time}</p>
+            <p><strong>Location:</strong> ${appointment.location}</p>
+          </div>
+
+          ${
+            type === "rescheduled"
+              ? `<p style="margin-top:10px;"><strong>Reason:</strong> ${appointment.rescheduleReason || "N/A"}</p>`
+              : ""
+          }
+
+          ${
+            type === "cancelled"
+              ? `<p style="color:#dc2626; margin-top:10px;">We’re sorry to see your appointment cancelled.</p>`
+              : ""
+          }
+
+          ${
+            type === "completed"
+              ? `<p style="color:#16a34a; margin-top:10px;">Thank you for visiting us ❤️</p>`
+              : ""
+          }
+
+          <p style="margin-top:20px;">Regards,<br/>${process.env.COMPANY_NAME}</p>
+
+        </div>
+      `
+    };
+
+    await sendEmailViaAPI(mailOptions);
+
+  } catch (err) {
+    console.error("Appointment status email failed:", err.message);
+  }
+};
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOrderConfirmationEmail,
-  sendOrderStatusEmail
+  sendOrderStatusEmail,
+  sendAppointmentConfirmationEmail,
+  sendAppointmentStatusEmail
   
 };
