@@ -37,66 +37,69 @@ var pgInstance = new Razorpay({
 
 
 
-// router.post("/:id/invoice", auth, async (req, res) => {
-//   try {
-//     let order;
+router.post("/:id/invoice", auth, async (req, res) => {
+  try {
+    let order;
 
-//     if (req.user.isAdmin) {
-//       // ✅ Admin can access ANY order
-//       order = await Order.findById(req.params.id)
-//         .populate("items.book user");
-//     } else {
-//       // ✅ User → only their own order
-//       order = await Order.findOne({
-//         _id: req.params.id,
-//         user: req.user.id,
-//       }).populate("items.book user");
-//     }
+    if (req.user.isAdmin) {
+      // ✅ Admin can access ANY order
+      order = await Order.findById(req.params.id)
+        .populate("items.book user");
+    } else {
+      // ✅ User → only their own order
+      order = await Order.findOne({
+        _id: req.params.id,
+        user: req.user.id,
+      }).populate("items.book user");
+    }
 
-//     if (!order) {
-//       return res.status(404).json({ message: "Order not found" });
-//     }
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-//     if (order.payment?.status !== "completed") {
-//       return res.status(400).json({ message: "Payment not completed yet" });
-//     }
+    if (order.payment?.status !== "completed") {
+      return res.status(400).json({ message: "Payment not completed yet" });
+    }
 
-//     if (order.orderDetails?.invoice?.url) {
-//       return res.json({
-//         message: "Invoice already exists",
-//         invoice: order.orderDetails.invoice,
-//       });
-//     }
+    if (order.orderDetails?.invoice?.url) {
+      return res.json({
+        message: "Invoice already exists",
+        invoice: order.orderDetails.invoice,
+      });
+    }
 
-//     const invoiceNumber = `INV-${Date.now()}-${order._id.toString().slice(-4)}`;
+    const invoiceNumber = `INV-${Date.now()}-${order._id.toString().slice(-4)}`;
 
-//     order.orderDetails.invoice = {
-//       number: invoiceNumber,
-//       generatedAt: new Date(),
-//       url: null,
-//     };
+    order.orderDetails.invoice = {
+      number: invoiceNumber,
+      generatedAt: new Date(),
+      url: null,
+    };
 
-//     await order.save();
+    await order.save();
 
-//     const invoiceUrl = await generateInvoice(order);
+    const invoiceUrl = await generateInvoice(order);
 
-//     order.orderDetails.invoice.url = invoiceUrl;
-//     await order.save();
+    order.orderDetails.invoice.url = invoiceUrl;
+    await order.save();
 
-//     return res.json({
-//       message: "Invoice generated successfully",
-//       invoice: order.orderDetails.invoice,
-//     });
+    return res.json({
+      message: "Invoice generated successfully",
+      invoice: order.orderDetails.invoice,
+    });
 
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: error.message });
-//   }
-// });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+});
 
 
 
 // Middleware to validate Razorpay webhook signature
+
+
+
 router.post('/paymentStatus', async (req, res) => {
   try {
     const payload = req.body;
