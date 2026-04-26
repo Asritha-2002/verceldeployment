@@ -12,6 +12,7 @@ const uploadPDFToCloudinary = (buffer, invoiceNumber) => {
         resource_type: "raw",
         folder: "invoices",
         public_id: invoiceNumber,
+        format: "pdf"
       },
       (error, result) => {
         if (error) return reject(error);
