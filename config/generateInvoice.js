@@ -109,8 +109,7 @@ const generateInvoice = async (order) => {
         </table>
 
         <div class="total">
-          Subtotal: ₹${subtotal.toFixed(2)} <br/>
-          GST: ₹${gst.toFixed(2)}<br/>          
+          Subtotal: ₹${subtotal.toFixed(2)} <br/>         
           Grand Total: ₹${Number(order.charges.totalAmount).toFixed(2)}
         </div>
 
