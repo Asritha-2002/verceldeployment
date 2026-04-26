@@ -1,9 +1,27 @@
-const fs = require("fs");
-const path = require("path");
 const cloudinary = require("./cloudinary");
 
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
+const streamifier = require("streamifier");
+
+// ✅ Upload PDF buffer to Cloudinary
+const uploadPDFToCloudinary = (buffer, invoiceNumber) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: "raw",
+        folder: "invoices",
+        public_id: invoiceNumber,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result.secure_url);
+      }
+    );
+
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
+};
 
 const generateInvoice = async (order) => {
   let browser;
@@ -11,22 +29,13 @@ const generateInvoice = async (order) => {
   try {
     const invoiceNumber = order.orderDetails.invoice.number;
 
-    // 📁 Create folder
-    const dirPath = path.join(__dirname, "../invoices");
-    if (!fs.existsSync(dirPath)) {
-      // fs.mkdirSync(dirPath, { recursive: true });
-      console.log("");
-    }
-
-    const filePath = path.join(dirPath, `${invoiceNumber}.pdf`);
-
     // 💰 subtotal
     const subtotal = order.items.reduce(
       (acc, item) => acc + item.price * item.quantity,
       0
     );
 
-    // 🧾 HTML (keep your full HTML here)
+    // 🧾 HTML (UNCHANGED)
     const html = `
       <html>
       <head>
@@ -112,7 +121,7 @@ const generateInvoice = async (order) => {
       </html>
     `;
 
-    // 🚀 LAUNCH BROWSER (PRODUCTION SAFE)
+    // 🚀 LAUNCH BROWSER (UNCHANGED)
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
@@ -126,24 +135,18 @@ const generateInvoice = async (order) => {
       waitUntil: "networkidle0",
     });
 
-    await page.pdf({
-      path: filePath,
+    // ✅ GENERATE PDF BUFFER (instead of file)
+    const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
     });
 
     await browser.close();
 
-    // ☁️ Upload to Cloudinary
-    const uploadResult = await cloudinary.uploader.upload(filePath, {
-      resource_type: "raw",
-      folder: "invoices",
-      public_id: invoiceNumber,
-    });
+    // ✅ UPLOAD DIRECTLY TO CLOUDINARY
+    const pdfUrl = await uploadPDFToCloudinary(pdfBuffer, invoiceNumber);
 
-    fs.unlinkSync(filePath);
-
-    return uploadResult.secure_url;
+    return pdfUrl;
 
   } catch (err) {
     console.error("Invoice error:", err);
