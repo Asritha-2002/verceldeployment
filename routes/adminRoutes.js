@@ -4,8 +4,12 @@ const cloudinary = require('../config/cloudinary');
 const path = require('path');
 const fs = require('fs');
 const { auth, adminAuth } = require('../middleware/auth');
-const { upload } = require('../middleware/upload');
-const { uploadVideoToCloudinary } = require('../middleware/upload');
+
+const { 
+  upload,
+  uploadImageToCloudinary,
+  uploadVideoToCloudinary
+} = require('../middleware/upload');
 const Book = require('../models/Book');
 const Order = require('../models/Order');
 const User = require('../models/User');
@@ -126,74 +130,88 @@ router.get("/dashboard-stats", auth, async (req, res) => {
   }
 });
 // Add new book
-router.post('/books', 
-  auth, 
-  adminAuth, 
+router.post(
+  "/books",
+  auth,
+  adminAuth,
   upload.fields([
-    { name: 'bookImages', maxCount: 5 },
-    // { name: 'bookVideos', maxCount: 2 }
+    { name: "bookImages", maxCount: 5 },
+    // { name: "bookVideos", maxCount: 2 }
   ]),
-  validate(bookSchemas.create), 
-  
+  validate(bookSchemas.create),
+
   async (req, res) => {
-    //console.log("FILES:", req.files);
-//console.log("BOOK IMAGES:", req.files.bookImages);
     try {
       const bookData = { ...req.body };
-      //console.log('Book data before processing:', bookData); 
 
-      // Handle product details
+      // ✅ Parent product fix
       if (!bookData.parentProduct || bookData.parentProduct === "") {
-  bookData.parentProduct = null;
-} else {
-  bookData.parentProduct = new mongoose.Types.ObjectId(bookData.parentProduct);
-}
-      if (typeof bookData.productDetails === 'string') {
+        bookData.parentProduct = null;
+      } else {
+        bookData.parentProduct = new mongoose.Types.ObjectId(
+          bookData.parentProduct
+        );
+      }
+
+      // ✅ Parse product details
+      if (typeof bookData.productDetails === "string") {
         try {
           bookData.productDetails = JSON.parse(bookData.productDetails);
         } catch (e) {
-          return res.status(400).json({ 
-            error: 'Validation error',
-            details: [{ field: 'productDetails', message: 'Invalid JSON format' }]
+          return res.status(400).json({
+            error: "Validation error",
+            details: [
+              { field: "productDetails", message: "Invalid JSON format" },
+            ],
           });
         }
       }
 
-      // Initialize arrays
+      // ✅ Initialize arrays
       bookData.images = [];
       bookData.videos = [];
 
-      // Handle uploaded images
-      if (req.files.bookImages) {
-        const uploadPromises = req.files.bookImages.map(file => 
-          cloudinary.uploader.upload(file.path)
+      // ================= IMAGES =================
+      if (req.files?.bookImages) {
+        const uploadPromises = req.files.bookImages.map((file) =>
+          uploadImageToCloudinary(file.buffer) // ✅ FIX HERE
         );
+
         const results = await Promise.all(uploadPromises);
-        bookData.images = results.map(result => ({
-          url: result.secure_url,
-          public_id: result.public_id
+
+        bookData.images = results.map((result) => ({
+          url: result.url,
+          public_id: result.public_id,
         }));
       }
 
-      // Handle uploaded videos
-      if (req.files.bookVideos) {
-        const videoTitles = JSON.parse(req.body.videoTitles || '[]');
-        const videoPromises = req.files.bookVideos.map(async (file, index) => {
-          const cloudinaryResult = await uploadVideoToCloudinary(file.path);
-          return {
-            path: cloudinaryResult.url,
-            title: videoTitles[index] || file.originalname,
-            duration: cloudinaryResult.duration || 0,
-            public_id: cloudinaryResult.public_id
-          };
-        });
+      // ================= VIDEOS =================
+      if (req.files?.bookVideos) {
+        const videoTitles = JSON.parse(req.body.videoTitles || "[]");
+
+        const videoPromises = req.files.bookVideos.map(
+          async (file, index) => {
+            const result = await uploadVideoToCloudinary(file.buffer); // ✅ FIX
+
+            return {
+              path: result.url,
+              title: videoTitles[index] || file.originalname,
+              duration: result.duration || 0,
+              public_id: result.public_id,
+            };
+          }
+        );
+
         bookData.videos = await Promise.all(videoPromises);
       }
 
+      // ✅ Save book
       const book = new Book(bookData);
       await book.save();
+
       res.status(201).json(book);
     } catch (error) {
+      console.error(error);
       res.status(400).json({ message: error.message });
     }
   }

@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require('../config/cloudinary');
+const streamifier = require("streamifier");
 
 // Create upload directories
 const uploadsDir = path.join(__dirname, '../public/uploads');
@@ -54,48 +55,53 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: {
-        fileSize: file => {
-            if (file.fieldname === 'bookVideos') {
-                return 100 * 1024 * 1024; // 100MB for videos
-            }
-            return 5 * 1024 * 1024; // 5MB for images
-        }
-    }
+  storage: multer.memoryStorage(), // ✅ NO local storage
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 100 * 1024 * 1024 // max 100MB (adjust if needed)
+  }
 });
 
 // Cloudinary upload functions
-const uploadImageToCloudinary = async (filePath, folder = 'ecommerce/images') => {
-    try {
-        const result = await cloudinary.uploader.upload(filePath, {
-            resource_type: 'image',
-            folder: folder
+const uploadImageToCloudinary = (fileBuffer, folder = "ecommerce/images") => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "image"
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          url: result.secure_url,
+          public_id: result.public_id
         });
-        return {
-            url: result.secure_url,
-            public_id: result.public_id
-        };
-    } catch (error) {
-        throw new Error('Failed to upload image to Cloudinary: ' + error.message);
-    }
+      }
+    );
+
+    streamifier.createReadStream(fileBuffer).pipe(stream);
+  });
 };
 
-const uploadVideoToCloudinary = async (filePath) => {
-    try {
-        const result = await cloudinary.uploader.upload(filePath, {
-            resource_type: 'video',
-            folder: 'ecommerce/videos'
+const uploadVideoToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "ecommerce/videos",
+        resource_type: "video"
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          url: result.secure_url,
+          public_id: result.public_id,
+          duration: result.duration
         });
-        return {
-            url: result.secure_url,
-            public_id: result.public_id,
-            duration: result.duration
-        };
-    } catch (error) {
-        throw new Error('Failed to upload video to Cloudinary: ' + error.message);
-    }
+      }
+    );
+
+    streamifier.createReadStream(fileBuffer).pipe(stream);
+  });
 };
 
 const uploadBlogImageToCloudinary = async (filePath, imageType = 'main') => {
