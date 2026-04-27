@@ -31,7 +31,7 @@ const sendEmailViaAPI = async (mailOptions) => {
 // ✅ Verification email function
 const sendVerificationEmail = async (email, verificationToken) => {
   const verifyLink = `${process.env.BASE_URL}verify-email?token=${verificationToken}`;
-
+  
   const mailOptions = {
     from: `"${process.env.COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -188,7 +188,8 @@ const sendOrderStatusEmail = async (email, order, status) => {
     };
 
     const message = statusMessages[status] || "Order status updated";
-
+    console.log(`${process.env.EMAIL_USER}`);
+    
     const itemsHTML = (order.items || []).map(item => `
       <div style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
         <img src="${item.imageUrl || ''}" 
