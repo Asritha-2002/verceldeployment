@@ -942,7 +942,7 @@ router.get('/preferences', auth, async (req, res) => {
 
 
 //get all books
-router.get("/books", auth, async (req, res) => {
+router.get("/books",  async (req, res) => {
   try {
     const books = await Book.find().sort({ createdAt: -1 });
 
@@ -961,7 +961,7 @@ router.get("/books", auth, async (req, res) => {
 });
 
 // get specific book
-router.get("/books/:id", auth, async (req, res) => {
+router.get("/books/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -991,7 +991,7 @@ router.get("/books/:id", auth, async (req, res) => {
 
 //related books
 
-router.get("/books/related/:id", auth, async (req, res) => {
+router.get("/books/related/:id",  async (req, res) => {
   try {
     const { id } = req.params;
 

@@ -118,7 +118,7 @@ const sendOrderConfirmationEmail = async (email, order) => {
         <div style="font-family: Arial; max-width:600px; margin:auto; padding:20px; background:#f9fafb;">
           
           <div style="text-align:center;">
-            <img src="${process.env.COMPANY_LOGO}" style="width:70px;" />
+       <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
             <h2>Order Confirmation</h2>
             <p>Thank you for your purchase!</p>
           </div>
@@ -210,7 +210,7 @@ const sendOrderStatusEmail = async (email, order, status) => {
         <div style="font-family: Arial; max-width: 600px; margin: auto; padding: 20px;">
           
           <div style="text-align: center;">
-            <img src="${process.env.COMPANY_LOGO}" style="width: 80px;" />
+            <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
             <h2 style="color: #dc2626;">${message}</h2>
           </div>
 
@@ -291,7 +291,7 @@ const sendAppointmentConfirmationEmail = async (email, appointment) => {
           
           <!-- HEADER -->
           <div style="text-align: center; margin-bottom: 25px;">
-            <img src="${process.env.COMPANY_LOGO}" alt="Logo" style="width: 80px; margin-bottom: 10px;" />
+           <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
             <h1 style="color: #16a34a; margin: 0;">Appointment Confirmed</h1>
             <p style="color: #555;">Your booking has been successfully scheduled</p>
           </div>
@@ -376,7 +376,7 @@ const sendAppointmentStatusEmail = async (email, appointment, type) => {
         <div style="font-family: Arial; max-width: 600px; margin: auto; padding: 20px;">
           
           <div style="text-align: center;">
-            <img src="${process.env.COMPANY_LOGO}" style="width: 70px;" />
+           <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
             <h2 style="color: ${selected.color};">${selected.title}</h2>
           </div>
 
