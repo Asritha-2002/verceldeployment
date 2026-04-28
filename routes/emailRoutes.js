@@ -6,8 +6,8 @@ const router = express.Router();
 router.post("/send-email", async (req, res) => {
   try {
     const { mailOptions } = req.body;
-    console.log("EMAIL:", process.env.EMAIL_USER);
-console.log("PASS EXISTS:", !!process.env.EMAIL_PASSWORD);
+//     console.log("EMAIL:", process.env.EMAIL_USER);
+// console.log("PASS EXISTS:", !!process.env.EMAIL_PASSWORD);
 
     const transporter = nodemailer.createTransport({
       service: "gmail",

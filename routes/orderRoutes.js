@@ -22,10 +22,12 @@ const generateInvoice = require("../config/generateInvoice");
 
 
 
-console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
-console.log('Razorpay Key Secret:', process.env.RAZORPAY_KEY_SECRET);
-console.log('Company Name:', process.env.COMPANY_NAME);
-console.log('Company Logo:', process.env.COMPANY_LOGO);
+// console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID);
+// console.log('Razorpay Key Secret:', process.env.RAZORPAY_KEY_SECRET);
+// console.log('Company Name:', process.env.COMPANY_NAME);
+// console.log('Company Logo:', process.env.COMPANY_LOGO);
+// console.log('Email user: ', process.env.EMAIL_USER);
+
 
 var pgInstance = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
