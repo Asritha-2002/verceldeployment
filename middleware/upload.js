@@ -43,14 +43,15 @@ const fileFilter = (req, file, cb) => {
         } else {
             cb(new Error('Not a video file'), false);
         }
-    } else if (file.fieldname === 'bookImages' || file.fieldname === 'image') {
+    // ✅ Added 'images' to the allowed fieldnames conditions below
+    } else if (file.fieldname === 'bookImages' || file.fieldname === 'image' || file.fieldname === 'images') {
         if (file.mimetype.startsWith('image/')) {
             cb(null, true);
         } else {
             cb(new Error('Not an image file'), false);
         }
     } else {
-        cb(new Error('Invalid field name'), false);
+        cb(new Error(`Invalid field name: ${file.fieldname}`), false);
     }
 };
 

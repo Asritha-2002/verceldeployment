@@ -13,21 +13,7 @@ const addressSchema = new mongoose.Schema({
   type: { type: String, default: "Home" },          
   isDefault: { type: Boolean, default: false },   
 });
-// const appointmentSchema=new mongoose.Schema({
-//   name: { type: String, required: true },
-//   email: { type: String, required: true, unique: true },
-//   phone: {type: String,required: true},
-//   petCategory:{ type: String, required: true },
-//   service: { type: String, required: true },
-//   date:{ type: Date, default: null, required:true},
-//   time:{type: time, required: true},
-//   location:{ type: String, required: true },
-//   status:{ 
-//     type: String, 
-//     enum: ['Male', 'Female', 'Other'], 
-//     default: null 
-//   }
-// })
+
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },

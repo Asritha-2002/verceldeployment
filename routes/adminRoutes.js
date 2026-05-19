@@ -19,6 +19,8 @@ const AdditionalCharges = require('../models/AdditionalCharges');
 const { validate } = require('../middleware/validate');
 const { bookSchemas } = require('../validation/schemas');
 const mongoose = require('mongoose');
+const Media=require('../models/Media')
+const Partner=require('../models/Partner')
 
 
 
@@ -1416,5 +1418,372 @@ router.get('/users/:id/orders', auth, adminAuth, async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // });
+
+// GET media-partners
+router.get(
+  "/upload/partners",
+  async (req, res) => {
+    try {
+      // Fetch partners from the database, newest uploads first (-1)
+      const partners = await Partner.find().sort({ createdAt: -1 });
+
+      res.status(200).json({
+        success: true,
+        count: partners.length,
+        message: "Partner images retrieved successfully",
+        data: partners,
+      });
+    } catch (error) {
+      console.error("GET PARTNERS ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch partner images",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// UPLOAD partners + media
+router.post(
+  "/upload/partners",
+  auth,
+  adminAuth,
+  upload.array("images", 50), // <-- CRITICAL: This MUST match your frontend append key exactly!
+  async (req, res) => {
+    try {
+      const files = req.files || [];
+      
+      if (files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No files provided for upload",
+        });
+      }
+
+      // 1. Map files into a clean array of Cloudinary upload execution promises
+      const uploadPromises = files.map((file) =>
+        uploadImageToCloudinary(file.buffer)
+      );
+
+      // 2. Resolve all image processing streams concurrently
+      const uploadResults = await Promise.all(uploadPromises);
+
+      // 3. Format payload records matching our dedicated Partner database collection
+      const partnerDocuments = uploadResults.map((result, index) => ({
+        url: result.url,
+        public_id: result.public_id,
+        name: files[index].originalname, // Storing original client file name optional but useful
+      }));
+
+      // 4. Bulk insert new items directly into your Partners collection
+      const newPartners = await Partner.insertMany(partnerDocuments);
+
+      res.status(201).json({
+        success: true,
+        message: "Partner images uploaded successfully",
+        data: newPartners,
+      });
+    } catch (error) {
+      console.error("UPLOAD PARTNERS ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to upload partner images",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// UPDATE single image in partners/media
+router.put(
+  "/upload/partners/:id",
+  auth,
+  adminAuth,
+  upload.single("images"), // Expecting a single file under the 'images' key
+  async (req, res) => {
+    try {
+      const partnerId = req.params.id;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "No new image file provided for replacement",
+        });
+      }
+
+      // 1. Locate the existing document
+      const existingPartner = await Partner.findById(partnerId);
+      if (!existingPartner) {
+        return res.status(404).json({
+          success: false,
+          message: "Partner record not found",
+        });
+      }
+
+      // 2. Remove the old image from Cloudinary to keep your cloud tidy
+      if (existingPartner.public_id) {
+        await cloudinary.uploader.destroy(existingPartner.public_id);
+      }
+
+      // 3. Upload the fresh replacement image to the partners folder
+      const uploadResult = await uploadImageToCloudinary(file.buffer, "ecommerce/partners");
+
+      // 4. Update the document database values
+      existingPartner.url = uploadResult.url;
+      existingPartner.public_id = uploadResult.public_id;
+      existingPartner.name = file.originalname;
+
+      const updatedPartner = await existingPartner.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Partner image updated successfully",
+        data: updatedPartner,
+      });
+    } catch (error) {
+      console.error("UPDATE PARTNER ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update partner image",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// DELETE single image from partners/media
+router.delete(
+  "/upload/partners/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
+    try {
+      const partnerId = req.params.id;
+
+      // 1. Find the asset in your database first
+      const partner = await Partner.findById(partnerId);
+      if (!partner) {
+        return res.status(404).json({
+          success: false,
+          message: "Partner image not found",
+        });
+      }
+
+      // 2. Erase the asset from your Cloudinary bucket using its public_id
+      if (partner.public_id) {
+        await cloudinary.uploader.destroy(partner.public_id);
+      }
+
+      // 3. Remove the record from your MongoDB collection
+      await Partner.findByIdAndDelete(partnerId);
+
+      res.status(200).json({
+        success: true,
+        message: "Partner image deleted successfully from cloud and database",
+      });
+    } catch (error) {
+      console.error("DELETE PARTNER ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to delete partner image",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+// =========================================================================
+// 1. GET ALL MEDIA IMAGES
+// DESC:  Retrieve all media gallery images
+// ACCESS: Public
+// =========================================================================
+router.get(
+  "/upload/media",
+  async (req, res) => {
+    try {
+      // Fetch media from the database, newest uploads first (-1)
+      const mediaItems = await Media.find().sort({ createdAt: -1 });
+
+      res.status(200).json({
+        success: true,
+        count: mediaItems.length,
+        message: "Media gallery images retrieved successfully",
+        data: mediaItems,
+      });
+    } catch (error) {
+      console.error("GET MEDIA ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to fetch media gallery images",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 2. BATCH UPLOAD MEDIA IMAGES
+// DESC:  Upload multiple new images to Cloudinary and save to Media collection
+// ACCESS: Admin Only
+// =========================================================================
+router.post(
+  "/upload/media",
+  auth,
+  adminAuth,
+  upload.array("images", 50), // Matches your frontend append key exactly!
+  async (req, res) => {
+    try {
+      const files = req.files || [];
+      
+      if (files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No files provided for upload",
+        });
+      }
+
+      // 1. Map files into a clean array of Cloudinary upload execution promises (Targeting /media)
+      const uploadPromises = files.map((file) =>
+        uploadImageToCloudinary(file.buffer, "ecommerce/media")
+      );
+
+      // 2. Resolve all image processing streams concurrently
+      const uploadResults = await Promise.all(uploadPromises);
+
+      // 3. Format payload records matching our dedicated Media database collection
+      const mediaDocuments = uploadResults.map((result, index) => ({
+        url: result.url,
+        public_id: result.public_id,
+        name: files[index].originalname,
+      }));
+
+      // 4. Bulk insert new items directly into your Media collection
+      const newMediaItems = await Media.insertMany(mediaDocuments);
+
+      res.status(201).json({
+        success: true,
+        message: "Media gallery images uploaded successfully",
+        data: newMediaItems,
+      });
+    } catch (error) {
+      console.error("UPLOAD MEDIA ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to upload media gallery images",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 3. UPDATE / REPLACE A SINGLE MEDIA IMAGE
+// DESC:  Swap a specific image asset on Cloudinary and refresh DB values
+// ACCESS: Admin Only
+// =========================================================================
+router.put(
+  "/upload/media/:id",
+  auth,
+  adminAuth,
+  upload.single("images"), // Expecting a single file under the 'images' key
+  async (req, res) => {
+    try {
+      const mediaId = req.params.id;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "No new image file provided for replacement",
+        });
+      }
+
+      // 1. Locate the existing document
+      const existingMedia = await Media.findById(mediaId);
+      if (!existingMedia) {
+        return res.status(404).json({
+          success: false,
+          message: "Media record not found",
+        });
+      }
+
+      // 2. Remove the old image from Cloudinary to keep your cloud tidy
+      if (existingMedia.public_id) {
+        await cloudinary.uploader.destroy(existingMedia.public_id);
+      }
+
+      // 3. Upload the fresh replacement image to the media folder
+      const uploadResult = await uploadImageToCloudinary(file.buffer, "ecommerce/media");
+
+      // 4. Update the document database values
+      existingMedia.url = uploadResult.url;
+      existingMedia.public_id = uploadResult.public_id;
+      existingMedia.name = file.originalname;
+
+      const updatedMedia = await existingMedia.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Media gallery image updated successfully",
+        data: updatedMedia,
+      });
+    } catch (error) {
+      console.error("UPDATE MEDIA ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update gallery image",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 4. DELETE A SINGLE MEDIA IMAGE
+// DESC:  Permanently erase image from Cloudinary and clean out DB record
+// ACCESS: Admin Only
+// =========================================================================
+router.delete(
+  "/upload/media/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
+    try {
+      const mediaId = req.params.id;
+
+      // 1. Find the asset in your database first
+      const mediaItem = await Media.findById(mediaId);
+      if (!mediaItem) {
+        return res.status(404).json({
+          success: false,
+          message: "Media image not found",
+        });
+      }
+
+      // 2. Erase the asset from your Cloudinary bucket using its public_id
+      if (mediaItem.public_id) {
+        await cloudinary.uploader.destroy(mediaItem.public_id);
+      }
+
+      // 3. Remove the record from your MongoDB collection
+      await Media.findByIdAndDelete(mediaId);
+
+      res.status(200).json({
+        success: true,
+        message: "Media image deleted successfully from cloud and database",
+      });
+    } catch (error) {
+      console.error("DELETE MEDIA ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to delete media image",
+        error: error.message,
+      });
+    }
+  }
+);
 
 module.exports = router;
