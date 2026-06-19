@@ -9,7 +9,7 @@ const reviewRoute=require('./routes/reviewRoute.js')
 const adminRoutes = require('./routes/adminRoutes');
 const orderRoutes = require('./routes/orderRoutes.js')
 const emailRoutes=require('./routes/emailRoutes.js')
-const googleAuthRoute=require('./routes/googleAuthRoute.js')
+// const googleAuthRoute=require('./routes/googleAuthRoute.js')
 // Load environment variables
 dotenv.config();
 
@@ -30,7 +30,7 @@ app.use('/api/users',appointmentRoutes)
 app.use('/api/users',reviewRoute)
 app.use('/api/admin',adminRoutes)
 app.use('/api/orders', orderRoutes);
-app.use('/api/users', googleAuthRoute)
+// app.use('/api/users', googleAuthRoute)
 // app.get('*', (req, res) => {
 //   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 // });
