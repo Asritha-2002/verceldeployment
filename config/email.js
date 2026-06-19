@@ -30,7 +30,7 @@ const sendEmailViaAPI = async (mailOptions) => {
 
 // ✅ Verification email function
 const sendVerificationEmail = async (email, verificationToken) => {
-  const verifyLink = `${process.env.BASE_URL}verify-email?token=${verificationToken}`;
+  const verifyLink = `${process.env.FRONTEND_URL}verify-email?token=${verificationToken}`;
  
   
   const mailOptions = {
@@ -116,7 +116,7 @@ const sendOrderConfirmationEmail = async (email, order) => {
           ${JSON.stringify(orderSchema)}
         </script>
 
-        <div style="font-family: Arial; max-width:600px; margin:auto; padding:20px; background:#f9fafb;">
+        <div style="font-family: Roboto; max-width:600px; margin:auto; padding:20px; background:#f9fafb;">
           
           <div style="text-align:center;">
        <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
@@ -209,7 +209,7 @@ const sendOrderStatusEmail = async (email, order, status) => {
       to: email,
       subject: `Order Update - #${order._id.toString().slice(-6)}`,
       html: `
-        <div style="font-family: Arial; max-width: 600px; margin: auto; padding: 20px;">
+        <div style="font-family: Roboto; max-width: 600px; margin: auto; padding: 20px;">
           
           <div style="text-align: center;">
             <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>
@@ -289,7 +289,7 @@ const sendAppointmentConfirmationEmail = async (email, appointment) => {
       to: email,
       subject: `Appointment Confirmed - ${process.env.COMPANY_NAME}`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9fafb;">
+        <div style="font-family: Roboto, sans-serif; max-width: 600px; margin: auto; padding: 20px; background-color: #f9fafb;">
           
           <!-- HEADER -->
           <div style="text-align: center; margin-bottom: 25px;">
@@ -375,7 +375,7 @@ const sendAppointmentStatusEmail = async (email, appointment, type) => {
       to: email,
       subject: `${selected.title} - ${process.env.COMPANY_NAME}`,
       html: `
-        <div style="font-family: Arial; max-width: 600px; margin: auto; padding: 20px;">
+        <div style="font-family: Roboto; max-width: 600px; margin: auto; padding: 20px;">
           
           <div style="text-align: center;">
            <h1><strong>From ${process.env.COMPANY_NAME}</strong></h1>

@@ -21,7 +21,7 @@ const { bookSchemas } = require('../validation/schemas');
 const mongoose = require('mongoose');
 const Media=require('../models/Media')
 const Partner=require('../models/Partner')
-
+const Achievement=require('../models/Achievements')
 
 
 router.get("/dashboard-stats", auth, async (req, res) => {
@@ -1780,6 +1780,203 @@ router.delete(
       res.status(500).json({
         success: false,
         message: "Failed to delete media image",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+// =========================================================================
+// 1. GET ALL ACHIEVEMENTS
+// DESC:  Fetch all achievements, newest first
+// ACCESS: Public
+// =========================================================================
+router.get("/upload/achievements", async (req, res) => {
+  try {
+    const achievements = await Achievement.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: achievements.length,
+      message: "Achievements retrieved successfully",
+      data: achievements,
+    });
+  } catch (error) {
+    console.error("GET ACHIEVEMENTS ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch achievements",
+      error: error.message,
+    });
+  }
+});
+
+// =========================================================================
+// 2. CREATE A NEW ACHIEVEMENT
+// DESC:  Upload image to Cloudinary and save achievement with metadata
+// ACCESS: Admin Only
+// =========================================================================
+router.post(
+  "/upload/achievements",
+  auth,
+  adminAuth,
+  upload.single("image"), // matches formData.append("image", form.file) in frontend
+  async (req, res) => {
+    try {
+      const { title, description, metric } = req.body;
+      const file = req.file;
+
+      if (!title || !title.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Title is required",
+        });
+      }
+
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "Achievement image is required",
+        });
+      }
+
+      // Upload to Cloudinary
+      const uploadResult = await uploadImageToCloudinary(
+        file.buffer,
+        "ecommerce/achievements"
+      );
+
+      const achievement = await Achievement.create({
+        url: uploadResult.url,
+        public_id: uploadResult.public_id,
+        title: title.trim(),
+        description: description?.trim() || "",
+        metric: metric?.trim() || "",
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Achievement created successfully",
+        data: achievement,
+      });
+    } catch (error) {
+      console.error("CREATE ACHIEVEMENT ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to create achievement",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 3. UPDATE AN ACHIEVEMENT
+// DESC:  Update metadata and optionally replace image on Cloudinary
+// ACCESS: Admin Only
+// =========================================================================
+router.put(
+  "/upload/achievements/:id",
+  auth,
+  adminAuth,
+  upload.single("image"), // optional — only sent when user picks a new image
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, description, metric } = req.body;
+      const file = req.file;
+
+      if (!title || !title.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Title is required",
+        });
+      }
+
+      const achievement = await Achievement.findById(id);
+      if (!achievement) {
+        return res.status(404).json({
+          success: false,
+          message: "Achievement not found",
+        });
+      }
+
+      // If a new image was uploaded, replace the old one on Cloudinary
+      if (file) {
+        if (achievement.public_id) {
+          await cloudinary.uploader.destroy(achievement.public_id);
+        }
+
+        const uploadResult = await uploadImageToCloudinary(
+          file.buffer,
+          "ecommerce/achievements"
+        );
+
+        achievement.url = uploadResult.url;
+        achievement.public_id = uploadResult.public_id;
+      }
+
+      // Always update text fields
+      achievement.title = title.trim();
+      achievement.description = description?.trim() || "";
+      achievement.metric = metric?.trim() || "";
+
+      const updated = await achievement.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Achievement updated successfully",
+        data: updated,
+      });
+    } catch (error) {
+      console.error("UPDATE ACHIEVEMENT ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update achievement",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 4. DELETE AN ACHIEVEMENT
+// DESC:  Remove image from Cloudinary and delete DB record
+// ACCESS: Admin Only
+// =========================================================================
+router.delete(
+  "/upload/achievements/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const achievement = await Achievement.findById(id);
+      if (!achievement) {
+        return res.status(404).json({
+          success: false,
+          message: "Achievement not found",
+        });
+      }
+
+      // Delete image from Cloudinary
+      if (achievement.public_id) {
+        await cloudinary.uploader.destroy(achievement.public_id);
+      }
+
+      await Achievement.findByIdAndDelete(id);
+
+      res.status(200).json({
+        success: true,
+        message: "Achievement deleted successfully",
+      });
+    } catch (error) {
+      console.error("DELETE ACHIEVEMENT ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to delete achievement",
         error: error.message,
       });
     }

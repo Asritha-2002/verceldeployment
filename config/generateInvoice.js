@@ -41,7 +41,7 @@ const generateInvoice = async (order) => {
       <html>
       <head>
         <style>
-          body { font-family: Arial; padding: 30px; color: #333; }
+          body { font-family: Roboto; padding: 30px; color: #333; }
           .header { display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:10px; }
           .title { font-size:26px; font-weight:bold; }
           .section { margin-top:20px; display:flex; justify-content:space-between; }
