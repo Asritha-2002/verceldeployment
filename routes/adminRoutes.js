@@ -22,6 +22,7 @@ const mongoose = require('mongoose');
 const Media=require('../models/Media')
 const Partner=require('../models/Partner')
 const Achievement=require('../models/Achievements')
+const Milestone = require("../models/Milestone");
 
 
 router.get("/dashboard-stats", auth, async (req, res) => {
@@ -1977,6 +1978,181 @@ router.delete(
       res.status(500).json({
         success: false,
         message: "Failed to delete achievement",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+// =========================================================================
+// 1. GET ALL MILESTONES
+// DESC:  Fetch all milestones, newest first
+// ACCESS: Public -- both admin and regular users can view these
+// =========================================================================
+router.get("/upload/milestones", async (req, res) => {
+  try {
+    const milestones = await Milestone.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: milestones.length,
+      message: "Milestones retrieved successfully",
+      data: milestones,
+    });
+  } catch (error) {
+    console.error("GET MILESTONES ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch milestones",
+      error: error.message,
+    });
+  }
+});
+
+// =========================================================================
+// 2. CREATE A NEW MILESTONE
+// DESC:  Upload image to Cloudinary and save milestone
+// ACCESS: Admin Only
+// =========================================================================
+router.post(
+  "/upload/milestones",
+  auth,
+  adminAuth,
+  upload.single("image"), // matches formData.append("image", ...) on the frontend
+  async (req, res) => {
+    try {
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "Milestone image is required",
+        });
+      }
+
+      const uploadResult = await uploadImageToCloudinary(
+        file.buffer,
+        "ecommerce/milestones"
+      );
+
+      const milestone = await Milestone.create({
+        url: uploadResult.url,
+        public_id: uploadResult.public_id,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Milestone created successfully",
+        data: milestone,
+      });
+    } catch (error) {
+      console.error("CREATE MILESTONE ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to create milestone",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 3. UPDATE A MILESTONE
+// DESC:  Replace the image on Cloudinary
+// ACCESS: Admin Only
+// =========================================================================
+router.put(
+  "/upload/milestones/:id",
+  auth,
+  adminAuth,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({
+          success: false,
+          message: "A new image is required to update this milestone",
+        });
+      }
+
+      const milestone = await Milestone.findById(id);
+      if (!milestone) {
+        return res.status(404).json({
+          success: false,
+          message: "Milestone not found",
+        });
+      }
+
+      if (milestone.public_id) {
+        await cloudinary.uploader.destroy(milestone.public_id);
+      }
+
+      const uploadResult = await uploadImageToCloudinary(
+        file.buffer,
+        "ecommerce/milestones"
+      );
+
+      milestone.url = uploadResult.url;
+      milestone.public_id = uploadResult.public_id;
+
+      const updated = await milestone.save();
+
+      res.status(200).json({
+        success: true,
+        message: "Milestone updated successfully",
+        data: updated,
+      });
+    } catch (error) {
+      console.error("UPDATE MILESTONE ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update milestone",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================================
+// 4. DELETE A MILESTONE
+// DESC:  Remove image from Cloudinary and delete DB record
+// ACCESS: Admin Only
+// =========================================================================
+router.delete(
+  "/upload/milestones/:id",
+  auth,
+  adminAuth,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const milestone = await Milestone.findById(id);
+      if (!milestone) {
+        return res.status(404).json({
+          success: false,
+          message: "Milestone not found",
+        });
+      }
+
+      if (milestone.public_id) {
+        await cloudinary.uploader.destroy(milestone.public_id);
+      }
+
+      await Milestone.findByIdAndDelete(id);
+
+      res.status(200).json({
+        success: true,
+        message: "Milestone deleted successfully",
+      });
+    } catch (error) {
+      console.error("DELETE MILESTONE ERROR:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to delete milestone",
         error: error.message,
       });
     }
