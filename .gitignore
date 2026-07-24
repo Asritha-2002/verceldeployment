@@ -12,4 +12,4 @@ email-service/.env/
 email-service/node_modules/
 # !email-service/
 # !email-service/server.js
-frontend/*
+/frontend/*
